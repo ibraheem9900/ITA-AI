@@ -203,7 +203,7 @@ export default function Auth() {
             setNotice('');
           }, 2000);
           break;
-        case 'signup':
+        case 'signup': {
           if (password !== confirmPassword) {
             setError('Passwords do not match');
             setLoading(false);
@@ -214,12 +214,40 @@ export default function Auth() {
             setLoading(false);
             return;
           }
-          const { needsVerification } = await signUp(email, password);
-          if (needsVerification) {
+          let signUpResult: { needsVerification: boolean } | null = null;
+          try {
+            signUpResult = await signUp(email, password);
+          } catch (signUpErr) {
+            const signUpMsg = (signUpErr instanceof Error ? signUpErr.message : String(signUpErr)).toLowerCase();
+            if (signUpMsg.includes('already') || signUpMsg.includes('registered') || signUpMsg.includes('exists')) {
+              // User already exists — try to sign them in instead
+              try {
+                await signIn(email, password);
+                break;
+              } catch (signInErr) {
+                const signInMsg = (signInErr instanceof Error ? signInErr.message : String(signInErr)).toLowerCase();
+                if (isNetworkError(signInMsg)) {
+                  setError('Cannot reach the server. Your Supabase project may be paused — please check supabase.com/dashboard and restore it.');
+                } else if (signInMsg.includes('invalid') || signInMsg.includes('credentials')) {
+                  setError('An account with this email already exists. Please sign in with your password, or reset it if you forgot.');
+                  switchMode('signin');
+                  setEmail(email);
+                } else {
+                  setError(signInErr instanceof Error ? signInErr.message : 'Sign-in failed');
+                }
+                setLoading(false);
+                return;
+              }
+            } else {
+              throw signUpErr;
+            }
+          }
+          if (signUpResult && signUpResult.needsVerification) {
             setNotice('Check your email for a confirmation link or verification code.');
             setMode('verify');
           }
           break;
+        }
         case 'signin':
         default:
           await signIn(email, password);
