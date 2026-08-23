@@ -1,13 +1,17 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Auth from './components/Auth';
+import AuthCallback from './components/AuthCallback';
 import ChatContainer from './components/ChatContainer';
 
 const APP_LOGO = '/1775218881775-3ee13392-9669-4d24-ae5f-9ac05cae51cf.png';
 
 // Detect if the current URL contains an OAuth callback hash
 function isOAuthCallback() {
-  return window.location.hash.includes('access_token') ||
-    window.location.hash.includes('error=');
+  return (
+    window.location.hash.includes('access_token') ||
+    window.location.hash.includes('error=')
+  );
 }
 
 function AppContent() {
@@ -33,9 +37,18 @@ function AppContent() {
           </div>
 
           <div className="flex gap-1.5">
-            <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <span className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            <span
+              className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+              style={{ animationDelay: '0ms' }}
+            />
+            <span
+              className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce"
+              style={{ animationDelay: '150ms' }}
+            />
+            <span
+              className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
+              style={{ animationDelay: '300ms' }}
+            />
           </div>
 
           <p className="text-gray-400 text-sm font-medium">
@@ -46,13 +59,30 @@ function AppContent() {
     );
   }
 
-  return user ? <ChatContainer /> : <Auth />;
+  return (
+    <Routes>
+      {/* OAuth callback route — always rendered, no auth gate */}
+      <Route path="/auth/callback" element={<AuthCallback />} />
+
+      {/* All other routes */}
+      <Route
+        path="*"
+        element={user ? <ChatContainer /> : <Navigate to="/" replace />}
+      />
+      <Route
+        path="/"
+        element={user ? <ChatContainer /> : <Auth />}
+      />
+    </Routes>
+  );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </BrowserRouter>
   );
 }

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  Mail, Lock, Eye, EyeOff, ArrowRight, Zap, Shield, Globe,
-  X, ExternalLink, CheckCircle2, AlertCircle, Copy, Check
+  Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Zap, Shield, Globe,
+  X, ExternalLink, CheckCircle2, AlertCircle, Copy, Check, KeyRound,
 } from 'lucide-react';
 
-type AuthMode = 'signin' | 'signup' | 'verify';
+type AuthMode = 'signin' | 'signup' | 'verify' | 'forgot-password' | 'reset-password';
 
 const APP_LOGO = '/1775218881775-3ee13392-9669-4d24-ae5f-9ac05cae51cf.png';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
@@ -145,14 +145,16 @@ export default function Auth() {
   const [mode, setMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showGoogleSetup, setShowGoogleSetup] = useState(false);
-  const { signIn, signUp, signInWithGoogle, verifyOtp } = useAuth();
+  const { signIn, signUp, signInWithGoogle, verifyOtp, forgotPassword, resetPassword } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,16 +162,53 @@ export default function Auth() {
     setNotice('');
     setLoading(true);
     try {
-      if (mode === 'verify') {
-        await verifyOtp(email, otp);
-      } else if (mode === 'signup') {
-        const { needsVerification } = await signUp(email, password);
-        if (needsVerification) {
-          setNotice('Check your email for a confirmation link or verification code.');
-          setMode('verify');
-        }
-      } else {
-        await signIn(email, password);
+      switch (mode) {
+        case 'verify':
+          await verifyOtp(email, otp);
+          break;
+        case 'forgot-password':
+          await forgotPassword(email);
+          setNotice('Check your email for a password reset link.');
+          break;
+        case 'reset-password':
+          if (newPassword.length < 6) {
+            setError('Password must be at least 6 characters');
+            setLoading(false);
+            return;
+          }
+          if (newPassword !== confirmPassword) {
+            setError('Passwords do not match');
+            setLoading(false);
+            return;
+          }
+          await resetPassword(newPassword);
+          setNotice('Password updated successfully!');
+          setTimeout(() => {
+            setMode('signin');
+            setNotice('');
+          }, 2000);
+          break;
+        case 'signup':
+          if (password !== confirmPassword) {
+            setError('Passwords do not match');
+            setLoading(false);
+            return;
+          }
+          if (password.length < 6) {
+            setError('Password must be at least 6 characters');
+            setLoading(false);
+            return;
+          }
+          const { needsVerification } = await signUp(email, password);
+          if (needsVerification) {
+            setNotice('Check your email for a confirmation link or verification code.');
+            setMode('verify');
+          }
+          break;
+        case 'signin':
+        default:
+          await signIn(email, password);
+          break;
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Authentication failed';
@@ -186,7 +225,6 @@ export default function Auth() {
       await signInWithGoogle();
     } catch (err) {
       const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
-      // Detect "provider not enabled" and show the setup guide
       if (
         msg.includes('provider') ||
         msg.includes('not enabled') ||
@@ -206,8 +244,19 @@ export default function Auth() {
     setError('');
     setNotice('');
     setPassword('');
+    setConfirmPassword('');
     setOtp('');
+    setNewPassword('');
     setMode(m);
+  };
+
+  const getPasswordRequirements = (pw: string) => {
+    const checks = [
+      { label: 'At least 6 characters', met: pw.length >= 6 },
+      { label: 'Has uppercase letter', met: /[A-Z]/.test(pw) },
+      { label: 'Has number', met: /[0-9]/.test(pw) },
+    ];
+    return checks;
   };
 
   return (
@@ -237,7 +286,8 @@ export default function Auth() {
           {/* Card */}
           <div className="glass rounded-2xl p-7 w-full max-w-md animate-scale-in">
 
-            {mode === 'verify' ? (
+            {/* ── Verify OTP ── */}
+            {mode === 'verify' && (
               <>
                 <div className="mb-5">
                   <div className="w-11 h-11 bg-blue-500/15 rounded-xl flex items-center justify-center mb-3">
@@ -284,7 +334,136 @@ export default function Auth() {
                   </button>
                 </form>
               </>
-            ) : (
+            )}
+
+            {/* ── Forgot Password ── */}
+            {mode === 'forgot-password' && (
+              <>
+                <div className="mb-5">
+                  <div className="w-11 h-11 bg-amber-500/15 rounded-xl flex items-center justify-center mb-3">
+                    <KeyRound className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <h2 className="text-xl font-bold text-white">Reset your password</h2>
+                  <p className="text-gray-400 text-sm mt-1">
+                    Enter your email and we'll send you a reset link
+                  </p>
+                </div>
+
+                {notice && (
+                  <div className="mb-4 p-3 bg-green-900/20 border border-green-700/40 rounded-xl text-green-300 text-sm animate-slide-up">
+                    {notice}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
+                      <input
+                        type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                        required placeholder="you@example.com"
+                        className="w-full pl-10 pr-4 py-2.5 bg-gray-800/70 border border-gray-700 rounded-xl text-white placeholder-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {error && <ErrorBanner msg={error} onDismiss={() => setError('')} />}
+
+                  <button
+                    type="submit" disabled={loading}
+                    className="btn-primary w-full py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-blue-500/20 text-sm"
+                  >
+                    {loading ? <Spinner /> : <>Send Reset Link <ArrowRight className="w-4 h-4" /></>}
+                  </button>
+
+                  <button
+                    type="button" onClick={() => switchMode('signin')}
+                    className="w-full text-sm text-gray-500 hover:text-gray-300 transition-colors flex items-center justify-center gap-1"
+                  >
+                    <ArrowLeft className="w-3 h-3" /> Back to sign in
+                  </button>
+                </form>
+              </>
+            )}
+
+            {/* ── Reset Password (new password) ── */}
+            {mode === 'reset-password' && (
+              <>
+                <div className="mb-5">
+                  <div className="w-11 h-11 bg-green-500/15 rounded-xl flex items-center justify-center mb-3">
+                    <Lock className="w-5 h-5 text-green-400" />
+                  </div>
+                  <h2 className="text-xl font-bold text-white">Set new password</h2>
+                  <p className="text-gray-400 text-sm mt-1">
+                    Create a strong new password for your account
+                  </p>
+                </div>
+
+                {notice && (
+                  <div className="mb-4 p-3 bg-green-900/20 border border-green-700/40 rounded-xl text-green-300 text-sm animate-slide-up">
+                    {notice}
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">New Password</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
+                      <input
+                        type={showPassword ? 'text' : 'password'} value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        required placeholder="••••••••"
+                        className="w-full pl-10 pr-10 py-2.5 bg-gray-800/70 border border-gray-700 rounded-xl text-white placeholder-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      />
+                      <button
+                        type="button" onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-300 transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">Confirm Password</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
+                      <input
+                        type={showPassword ? 'text' : 'password'} value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required placeholder="••••••••"
+                        className="w-full pl-10 pr-4 py-2.5 bg-gray-800/70 border border-gray-700 rounded-xl text-white placeholder-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {newPassword.length > 0 && (
+                    <div className="space-y-1">
+                      {getPasswordRequirements(newPassword).map(({ label, met }) => (
+                        <div key={label} className="flex items-center gap-2 text-xs">
+                          <CheckCircle2 className={`w-3.5 h-3.5 ${met ? 'text-green-400' : 'text-gray-600'}`} />
+                          <span className={met ? 'text-green-400' : 'text-gray-500'}>{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {error && <ErrorBanner msg={error} onDismiss={() => setError('')} />}
+
+                  <button
+                    type="submit" disabled={loading}
+                    className="btn-primary w-full py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-blue-500/20 text-sm mt-1"
+                  >
+                    {loading ? <Spinner /> : <>Update Password <ArrowRight className="w-4 h-4" /></>}
+                  </button>
+                </form>
+              </>
+            )}
+
+            {/* ── Sign In / Sign Up ── */}
+            {(mode === 'signin' || mode === 'signup') && (
               <>
                 <div className="mb-5">
                   <h2 className="text-xl font-bold text-white">
@@ -332,7 +511,18 @@ export default function Auth() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-medium text-gray-400">Password</label>
+                      {mode === 'signin' && (
+                        <button
+                          type="button"
+                          onClick={() => switchMode('forgot-password')}
+                          className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          Forgot password?
+                        </button>
+                      )}
+                    </div>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
                       <input
@@ -348,6 +538,23 @@ export default function Auth() {
                       </button>
                     </div>
                   </div>
+
+                  {mode === 'signup' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1.5">Confirm Password</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
+                        <input
+                          type={showPassword ? 'text' : 'password'} value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)} required placeholder="••••••••"
+                          className="w-full pl-10 pr-4 py-2.5 bg-gray-800/70 border border-gray-700 rounded-xl text-white placeholder-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        />
+                      </div>
+                      {confirmPassword && password !== confirmPassword && (
+                        <p className="text-red-400 text-xs mt-1">Passwords do not match</p>
+                      )}
+                    </div>
+                  )}
 
                   {error && <ErrorBanner msg={error} onDismiss={() => setError('')} />}
 
