@@ -80,8 +80,42 @@ export default function ChatContainer() {
     if (!error && data) setMessages(data);
   };
 
+  // Generate a smart title using AI based on the conversation content
+  const generateSmartTitle = async (firstMessage: string): Promise<string> => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-search`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `Generate a short, descriptive conversation title (3-6 words) for this message: "${firstMessage}". Return ONLY the title, nothing else.`,
+          personality: 'general',
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Clean up the response - remove quotes, periods, etc.
+        let title = data.response.replace(/["'.]/g, '').trim();
+        // Limit to 50 characters
+        if (title.length > 50) title = title.substring(0, 47) + '...';
+        return title;
+      }
+    } catch (err) {
+      console.error('Error generating title:', err);
+    }
+    
+    // Fallback: use first few words of the message
+    const words = firstMessage.split(' ').slice(0, 5).join(' ');
+    return words.length > 50 ? words.substring(0, 47) + '...' : words;
+  };
+
   const createConversation = async (firstMessage: string): Promise<string> => {
-    const title = firstMessage.slice(0, 50) + (firstMessage.length > 50 ? '...' : '');
+    // Generate a smart title first
+    const title = await generateSmartTitle(firstMessage);
+    
     const { data, error } = await supabase
       .from('conversations').insert({ user_id: user!.id, title }).select().single();
     if (error || !data) throw new Error('Failed to create conversation');
