@@ -9,6 +9,7 @@ import Navbar from './Navbar';
 import SettingsModal from './SettingsModal';
 import { useAuth } from '../contexts/AuthContext';
 import { getConversationalResponse } from '../lib/conversationalAI';
+import { getAIResponse, generateSmartTitle } from '../lib/clientAI';
 
 const APP_LOGO = '/1775218881775-3ee13392-9669-4d24-ae5f-9ac05cae51cf.png';
 
@@ -80,40 +81,8 @@ export default function ChatContainer() {
     if (!error && data) setMessages(data);
   };
 
-  // Generate a smart title using AI based on the conversation content
-  const generateSmartTitle = async (firstMessage: string): Promise<string> => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-search`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: `Generate a short, descriptive conversation title (3-6 words) for this message: "${firstMessage}". Return ONLY the title, nothing else.`,
-          personality: 'general',
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Clean up the response - remove quotes, periods, etc.
-        let title = data.response.replace(/["'.]/g, '').trim();
-        // Limit to 50 characters
-        if (title.length > 50) title = title.substring(0, 47) + '...';
-        return title;
-      }
-    } catch (err) {
-      console.error('Error generating title:', err);
-    }
-    
-    // Fallback: use first few words of the message
-    const words = firstMessage.split(' ').slice(0, 5).join(' ');
-    return words.length > 50 ? words.substring(0, 47) + '...' : words;
-  };
-
   const createConversation = async (firstMessage: string): Promise<string> => {
-    // Generate a smart title first
+    // Generate a smart title using AI
     const title = await generateSmartTitle(firstMessage);
     
     const { data, error } = await supabase
@@ -163,39 +132,26 @@ export default function ChatContainer() {
         return;
       }
 
-      // ── Real query — call edge function with web search ───────────────────
+      // ── Real query — call client-side AI directly ─────────────────────────
       await supabase.from('messages').insert({ conversation_id: conversationId, role: 'user', content });
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-search`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query: content, conversationId, personality }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API Error (${response.status}): ${errorText}`);
-      }
-
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
+      // Call AI directly from client (no edge function needed)
+      const aiResult = await getAIResponse(content, personality);
 
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         conversation_id: conversationId,
         role: 'assistant',
-        content: data.response,
-        sources: data.sources,
+        content: aiResult.response,
+        sources: aiResult.sources,
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
 
+      // Save to Supabase in background
       await supabase.from('messages').insert({
         conversation_id: conversationId, role: 'assistant',
-        content: data.response, sources: data.sources,
+        content: aiResult.response, sources: aiResult.sources,
       });
       await supabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId);
       await loadConversations();
@@ -203,11 +159,20 @@ export default function ChatContainer() {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error('Error sending message:', msg);
+      
+      // Show a more helpful error message
+      let errorMsg = `Something went wrong: ${msg}`;
+      if (msg.includes('GROQ_API_KEY')) {
+        errorMsg = 'AI is not configured. Please add your GROQ_API_KEY to the .env file.';
+      } else if (msg.includes('API error')) {
+        errorMsg = `AI error: ${msg}. Please check your API key is valid.`;
+      }
+      
       setMessages((prev) => [...prev, {
         id: crypto.randomUUID(),
         conversation_id: currentConversationId || '',
         role: 'assistant',
-        content: `Something went wrong: ${msg}. Please check that your GROQ_API_KEY and SERP_API_KEY are configured in your Supabase edge function secrets.`,
+        content: errorMsg,
         created_at: new Date().toISOString(),
       }]);
     } finally {
