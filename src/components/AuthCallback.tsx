@@ -17,6 +17,18 @@ export default function AuthCallback() {
           await supabase.auth.exchangeCodeForSession(window.location.href);
 
         if (sessionError) {
+          const errMsg = sessionError.message.toLowerCase();
+          // Detect network / DNS failures
+          if (
+            errMsg.includes('failed to fetch') ||
+            errMsg.includes('network') ||
+            errMsg.includes('econnrefused')
+          ) {
+            throw new Error(
+              'Cannot reach Supabase. The project may be paused — visit supabase.com/dashboard and click Restore.',
+            );
+          }
+
           // Try hash-based flow (legacy / implicit grant)
           const hashParams = new URLSearchParams(
             window.location.hash.substring(1),

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, Zap, Shield, Globe,
@@ -6,6 +6,21 @@ import {
 } from 'lucide-react';
 
 type AuthMode = 'signin' | 'signup' | 'verify' | 'forgot-password' | 'reset-password';
+
+function isNetworkError(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return (
+    m.includes('failed to fetch') ||
+    m.includes('network') ||
+    m.includes('err_name_not_resolved') ||
+    m.includes('err_network') ||
+    m.includes('dns_probe') ||
+    m.includes('econnrefused') ||
+    m.includes('econnreset') ||
+    m.includes('Load failed') ||
+    m.includes('networkerror')
+  );
+}
 
 const APP_LOGO = '/1775218881775-3ee13392-9669-4d24-ae5f-9ac05cae51cf.png';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
@@ -211,8 +226,12 @@ export default function Auth() {
           break;
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Authentication failed';
-      setError(msg);
+      const raw = err instanceof Error ? err.message : String(err);
+      if (isNetworkError(raw)) {
+        setError('Cannot reach the server. Your Supabase project may be paused — please check supabase.com/dashboard and restore it.');
+      } else {
+        setError(raw || 'Authentication failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -224,13 +243,16 @@ export default function Auth() {
     try {
       await signInWithGoogle();
     } catch (err) {
-      const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
-      if (
-        msg.includes('provider') ||
-        msg.includes('not enabled') ||
-        msg.includes('validation_failed') ||
-        msg.includes('unsupported') ||
-        msg.includes('bad request')
+      const raw = err instanceof Error ? err.message : String(err);
+      const lower = raw.toLowerCase();
+      if (isNetworkError(lower)) {
+        setError('Cannot reach the server. Your Supabase project may be paused — please check supabase.com/dashboard and restore it.');
+      } else if (
+        lower.includes('provider') ||
+        lower.includes('not enabled') ||
+        lower.includes('validation_failed') ||
+        lower.includes('unsupported') ||
+        lower.includes('bad request')
       ) {
         setShowGoogleSetup(true);
       } else {
@@ -239,6 +261,20 @@ export default function Auth() {
       setGoogleLoading(false);
     }
   };
+
+  // Check Supabase connectivity on mount
+  const [serverStatus, setServerStatus] = useState<'ok' | 'down' | 'checking'>('checking');
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch(SUPABASE_URL + '/rest/v1/', { method: 'HEAD', signal: AbortSignal.timeout(8000) });
+        setServerStatus(res.ok || res.status === 401 || res.status === 404 ? 'ok' : 'down');
+      } catch {
+        setServerStatus('down');
+      }
+    };
+    check();
+  }, []);
 
   const switchMode = (m: AuthMode) => {
     setError('');
@@ -282,6 +318,25 @@ export default function Auth() {
             </div>
             <p className="text-gray-500 text-sm mt-1.5">Your intelligent search companion</p>
           </div>
+
+          {/* Supabase connection warning */}
+          {serverStatus === 'down' && (
+            <div className="mb-4 p-4 bg-red-900/20 border border-red-700/40 rounded-xl animate-slide-up">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-red-300 text-sm font-semibold">Server is unavailable</p>
+                  <p className="text-red-400/70 text-xs mt-1 leading-relaxed">
+                    Your Supabase project appears to be paused. Go to{' '}
+                    <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="underline text-red-300 hover:text-red-200">
+                      supabase.com/dashboard
+                    </a>{' '}
+                    and click <strong>Restore</strong> on your project to fix this.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Card */}
           <div className="glass rounded-2xl p-7 w-full max-w-md animate-scale-in">
