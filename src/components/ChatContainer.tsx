@@ -162,8 +162,8 @@ export default function ChatContainer() {
       
       // Show a more helpful error message
       let errorMsg = `Something went wrong: ${msg}`;
-      if (msg.includes('GROQ_API_KEY')) {
-        errorMsg = 'AI is not configured. Please add your GROQ_API_KEY to the .env file.';
+      if (msg.includes('GROQ_API_KEY') || msg.includes('not configured')) {
+        errorMsg = `AI is not configured. \n\nTo fix this in Vercel:\n1. Go to Settings → Environment Variables\n2. Add: VITE_GROQ_API_KEY = your_groq_api_key\n3. Redeploy\n\nNote: Variables MUST start with VITE_ prefix!`;
       } else if (msg.includes('API error')) {
         errorMsg = `AI error: ${msg}. Please check your API key is valid.`;
       }

@@ -4,9 +4,9 @@
 import { SearchSource } from '../types/chat';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
-// These are read from .env via Vite
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
-const SERP_API_KEY = import.meta.env.VITE_SERP_API_KEY;
+// These are read from .env via Vite (MUST have VITE_ prefix!)
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || import.meta.env.GROQ_API_KEY;
+const SERP_API_KEY = import.meta.env.VITE_SERP_API_KEY || import.meta.env.SERP_API_KEY;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 // ─── Working Groq model names ─────────────────────────────────────────────────
@@ -264,8 +264,17 @@ export async function generateSmartTitle(firstMessage: string): Promise<string> 
 // ─── Check if API is configured ───────────────────────────────────────────────
 export function isAIConfigured(): { configured: boolean; missing: string[] } {
   const missing: string[] = [];
-  if (!GROQ_API_KEY) missing.push('VITE_GROQ_API_KEY');
+  if (!GROQ_API_KEY) missing.push('VITE_GROQ_API_KEY (required for AI)');
   if (!SERP_API_KEY) missing.push('VITE_SERP_API_KEY (optional, for web search)');
+  
+  // Check if user added variables without VITE_ prefix
+  const debugInfo = {
+    VITE_GROQ_API_KEY: import.meta.env.VITE_GROQ_API_KEY ? 'set' : 'missing',
+    GROQ_API_KEY: import.meta.env.GROQ_API_KEY ? 'set' : 'missing',
+    VITE_SERP_API_KEY: import.meta.env.VITE_SERP_API_KEY ? 'set' : 'missing',
+    SERP_API_KEY: import.meta.env.SERP_API_KEY ? 'set' : 'missing',
+  };
+  console.log('API Key Debug:', debugInfo);
   
   return {
     configured: missing.length === 0 || (missing.length === 1 && missing[0].includes('optional')),
