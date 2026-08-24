@@ -1,5 +1,5 @@
 import { Conversation } from '../types/chat';
-import { Plus, MessageSquare, X } from 'lucide-react';
+import { Plus, MessageSquare, X, Trash2 } from 'lucide-react';
 
 interface ChatSidebarProps {
   conversations: Conversation[];
@@ -8,6 +8,7 @@ interface ChatSidebarProps {
   onNewChat: () => void;
   isOpen: boolean;
   onClose: () => void;
+  onDeleteConversation?: (id: string) => void;
 }
 
 export default function ChatSidebar({
@@ -17,6 +18,7 @@ export default function ChatSidebar({
   onNewChat,
   isOpen,
   onClose,
+  onDeleteConversation,
 }: ChatSidebarProps) {
 
   const handleNewChat = () => {
@@ -27,6 +29,11 @@ export default function ChatSidebar({
   const handleSelect = (id: string) => {
     onSelectConversation(id);
     onClose();
+  };
+
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    onDeleteConversation?.(id);
   };
 
   const sidebarContent = (
@@ -73,7 +80,15 @@ export default function ChatSidebar({
               <MessageSquare className={`w-4 h-4 flex-shrink-0 transition-colors ${
                 currentConversationId === conv.id ? 'text-blue-400' : 'text-gray-600 group-hover:text-gray-400'
               }`} />
-              <span className="truncate text-sm">{conv.title}</span>
+              <span className="truncate text-sm flex-1">{conv.title}</span>
+              {onDeleteConversation && (
+                <span
+                  onClick={(e) => handleDelete(e, conv.id)}
+                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </span>
+              )}
             </button>
           ))
         )}
