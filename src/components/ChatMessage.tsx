@@ -1,6 +1,6 @@
 import ReactMarkdown from 'react-markdown';
 import { Message, MESSAGE_ACTIONS } from '../types/chat';
-import { User, ExternalLink, Globe, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
+import { User, ExternalLink, Globe, ChevronDown, ChevronUp, Copy, Check, Lightbulb, Search, Pencil, FileText, ListOrdered, Code } from 'lucide-react';
 import { useState } from 'react';
 
 interface ChatMessageProps {
@@ -9,6 +9,17 @@ interface ChatMessageProps {
 }
 
 const APP_LOGO = '/1775218881775-3ee13392-9669-4d24-ae5f-9ac05cae51cf.png';
+
+// ─── Icon mapping for quick actions ───────────────────────────────────────────
+
+const actionIconMap: Record<string, typeof Lightbulb> = {
+  'explain': Lightbulb,
+  'elaborate': Search,
+  'rewrite-concise': Pencil,
+  'rewrite-detailed': FileText,
+  'summarize': ListOrdered,
+  'generate-code': Code,
+};
 
 export default function ChatMessage({ message, onAction }: ChatMessageProps) {
   const isUser = message.role === 'user';
@@ -27,24 +38,23 @@ export default function ChatMessage({ message, onAction }: ChatMessageProps) {
     const hasCode = content.includes('```') || content.includes('function') || content.includes('class');
     const hasLongText = message.content.length > 200;
     
-    // Always show core actions for AI messages
     const actions = MESSAGE_ACTIONS.filter(action => {
       if (action.id === 'generate-code') return hasCode;
       if (action.id === 'summarize') return hasLongText;
       return true;
     });
     
-    return actions.slice(0, 6); // Max 6 actions
+    return actions.slice(0, 6);
   };
 
   return (
-    <div className={`flex gap-4 px-6 py-5 animate-slide-up ${
+    <div className={`flex gap-4 px-4 sm:px-6 py-4 animate-slide-up ${
       isUser 
         ? 'bg-transparent' 
         : 'bg-gradient-to-r from-gray-900/40 via-gray-900/60 to-gray-900/40'
     }`}>
       {/* Avatar */}
-      <div className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden ${
+      <div className={`flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center overflow-hidden ${
         isUser 
           ? 'bg-gradient-to-br from-blue-600 to-cyan-600' 
           : 'bg-gradient-to-br from-slate-800 to-gray-800 border border-gray-700'
@@ -176,16 +186,19 @@ export default function ChatMessage({ message, onAction }: ChatMessageProps) {
         {/* Quick Action Buttons */}
         {!isUser && onAction && (
           <div className="flex flex-wrap gap-2 mt-4">
-            {getRelevantActions().map((action) => (
-              <button
-                key={action.id}
-                onClick={() => onAction(action.action)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-800/50 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-cyan-400 transition-all duration-200 border border-gray-700/50 hover:border-cyan-500/30"
-              >
-                <span>{action.icon}</span>
-                <span>{action.label}</span>
-              </button>
-            ))}
+            {getRelevantActions().map((action) => {
+              const Icon = actionIconMap[action.icon] || Lightbulb;
+              return (
+                <button
+                  key={action.id}
+                  onClick={() => onAction(action.action)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-800/50 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-cyan-400 transition-all duration-200 border border-gray-700/50 hover:border-cyan-500/30"
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{action.label}</span>
+                </button>
+              );
+            })}
           </div>
         )}
 

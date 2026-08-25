@@ -1,11 +1,28 @@
 import { AIAgent } from '../types/chat';
-import { ChevronRight, Sparkles, Crown } from 'lucide-react';
+import { ChevronRight, Sparkles, Crown, Code, Search, Pen, FileText, Users, BarChart3, Brain, Lightbulb } from 'lucide-react';
 
 interface AgentsPanelProps {
   agents: AIAgent[];
   onAgentSelect?: (agent: AIAgent) => void;
   isOpen: boolean;
   onClose: () => void;
+}
+
+// ─── Icon Mapping ─────────────────────────────────────────────────────────────
+
+const iconMap: Record<string, typeof Code> = {
+  Code,
+  Search,
+  Pen,
+  FileText,
+  Users,
+  BarChart3,
+  Brain,
+  Lightbulb,
+};
+
+function getAgentIcon(iconName: string) {
+  return iconMap[iconName] || Code;
 }
 
 // ─── Status Badge Component ───────────────────────────────────────────────────
@@ -29,6 +46,8 @@ function StatusBadge({ status }: { status: AIAgent['status'] }) {
 // ─── Agent Card Component ─────────────────────────────────────────────────────
 
 function AgentCard({ agent, onSelect }: { agent: AIAgent; onSelect: () => void }) {
+  const Icon = getAgentIcon(agent.icon);
+  
   return (
     <button
       onClick={onSelect}
@@ -40,10 +59,10 @@ function AgentCard({ agent, onSelect }: { agent: AIAgent; onSelect: () => void }
       }`}
     >
       <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
         style={{ background: `${agent.color}20`, border: `1px solid ${agent.color}40` }}
       >
-        {agent.icon}
+        <Icon className="w-5 h-5" style={{ color: agent.color }} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">

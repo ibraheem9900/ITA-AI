@@ -1,50 +1,18 @@
-/*
-  # Add AI Agents and Tools Tables
+-- =====================================================
+-- Migration: Add AI Agents and Tools Tables
+-- =====================================================
 
-  1. New Tables
-    - `ai_agents`
-      - `id` (uuid, primary key)
-      - `name` (text) - agent display name
-      - `description` (text) - what the agent does
-      - `icon` (text) - emoji or icon identifier
-      - `color` (text) - accent color for the agent
-      - `system_prompt` (text) - specialized system prompt
-      - `status` (text) - 'active', 'inactive', 'coming_soon'
-      - `created_at` (timestamptz)
-
-    - `ai_tools`
-      - `id` (uuid, primary key)
-      - `name` (text) - tool display name
-      - `description` (text) - what the tool does
-      - `icon` (text) - emoji or icon identifier
-      - `category` (text) - 'productivity', 'creative', 'analysis'
-      - `is_enabled` (boolean) - whether tool is available
-      - `created_at` (timestamptz)
-
-    - `user_settings`
-      - `id` (uuid, primary key)
-      - `user_id` (uuid, unique) - reference to auth.users
-      - `selected_model` (text) - preferred AI model
-      - `focus_mode` (boolean) - focus mode toggle state
-      - `created_at` (timestamptz)
-      - `updated_at` (timestamptz)
-
-  2. Seed Data
-    - Default agents (Python Dev, UI UX Expert, Market Analyst, Data Scientist)
-    - Default tools (Code Interpreter, Image Generation, Document Summary, Data Analysis)
-
-  3. Security
-    - Enable RLS on all tables
-    - Agents and tools are readable by all authenticated users
-    - User settings are private to each user
-*/
+-- Drop existing tables if they exist (to re-seed with new agents)
+DROP TABLE IF EXISTS ai_agents CASCADE;
+DROP TABLE IF EXISTS ai_tools CASCADE;
+DROP TABLE IF EXISTS user_settings CASCADE;
 
 -- AI Agents table
 CREATE TABLE IF NOT EXISTS ai_agents (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
   description text DEFAULT '',
-  icon text DEFAULT '🤖',
+  icon text DEFAULT 'Bot', -- Lucide icon name
   color text DEFAULT '#3b82f6',
   system_prompt text DEFAULT '',
   status text DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'coming_soon')),
@@ -56,7 +24,7 @@ CREATE TABLE IF NOT EXISTS ai_tools (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
   description text DEFAULT '',
-  icon text DEFAULT '🛠️',
+  icon text DEFAULT 'Wrench', -- Lucide icon name
   category text DEFAULT 'productivity' CHECK (category IN ('productivity', 'creative', 'analysis')),
   is_enabled boolean DEFAULT true,
   created_at timestamptz DEFAULT now() NOT NULL
@@ -111,18 +79,52 @@ CREATE POLICY "Users can update own settings"
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- Seed default agents
+-- =====================================================
+-- Seed: New AI Agents (Code, Research, Writing, Data)
+-- =====================================================
+
 INSERT INTO ai_agents (name, description, icon, color, system_prompt, status) VALUES
-  ('Python Dev', 'Expert Python developer for coding tasks, debugging, and optimization', '🐍', '#3776ab', 'You are an expert Python developer. Help users write clean, efficient Python code with best practices.', 'active'),
-  ('UI UX Expert', 'Specialist in user interface design and user experience', '🎨', '#ff6b6b', 'You are a UI/UX design expert. Help users create intuitive, beautiful, and accessible interfaces.', 'active'),
-  ('Market Analyst', 'Business and market research specialist', '📊', '#4ecdc4', 'You are a market analyst. Help users understand market trends, competitive analysis, and business strategy.', 'active'),
-  ('Data Scientist', 'Expert in data analysis, ML, and statistical modeling', '🔬', '#9b59b6', 'You are a data scientist. Help users with data analysis, machine learning, and statistical modeling.', 'active')
+  (
+    'Code Assistant',
+    'General coding help across languages, debugging, and code review',
+    'Code',
+    '#3b82f6',
+    'You are an expert Code Assistant. Help users with coding in any language, debugging errors, reviewing code for best practices, optimizing performance, and explaining complex programming concepts. Always provide working, production-quality code with clear comments.',
+    'active'
+  ),
+  (
+    'Research Assistant',
+    'Web search, current events, fact-finding, and summarization',
+    'Search',
+    '#06b6d4',
+    'You are a Research Assistant specializing in finding accurate, up-to-date information. Help users search the web, summarize articles, fact-check claims, gather data on topics, and present findings in clear, organized formats with proper source attribution.',
+    'active'
+  ),
+  (
+    'Writing Assistant',
+    'Emails, content drafting, rewriting, and tone adjustment',
+    'Pen',
+    '#8b5cf6',
+    'You are a Writing Assistant skilled in crafting compelling content. Help users write professional emails, blog posts, marketing copy, and more. Adjust tone (formal, casual, persuasive), improve clarity, fix grammar, and ensure the message resonates with the target audience.',
+    'active'
+  ),
+  (
+    'Data & Docs Analyst',
+    'Analyzing spreadsheets, PDFs, and documents',
+    'FileText',
+    '#10b981',
+    'You are a Data & Documents Analyst. Help users analyze spreadsheets, extract insights from PDFs, summarize lengthy documents, identify trends in data, create reports, and transform raw data into actionable intelligence. Be precise and data-driven.',
+    'active'
+  )
 ON CONFLICT DO NOTHING;
 
--- Seed default tools
+-- =====================================================
+-- Seed: AI Tools
+-- =====================================================
+
 INSERT INTO ai_tools (name, description, icon, category, is_enabled) VALUES
-  ('Code Interpreter', 'Write, run, and debug code in multiple languages', '💻', 'productivity', true),
-  ('Image Generation', 'Create images from text descriptions', '🖼️', 'creative', true),
-  ('Document Summary', 'Summarize long documents and articles', '📄', 'productivity', true),
-  ('Data Analysis', 'Analyze datasets and create visualizations', '📈', 'analysis', true)
+  ('Code Interpreter', 'Write, run, and debug code in multiple languages', 'Code', 'productivity', true),
+  ('Research Search', 'Search the web for current information and sources', 'Search', 'productivity', true),
+  ('Document Summary', 'Summarize long documents and articles', 'FileText', 'productivity', true),
+  ('Data Analysis', 'Analyze datasets and create visualizations', 'BarChart3', 'analysis', true)
 ON CONFLICT DO NOTHING;

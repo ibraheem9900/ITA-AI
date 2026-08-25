@@ -73,14 +73,11 @@ export default function ChatInput({ onSend, disabled = false }: ChatInputProps) 
 
     recognition.onresult = (event: any) => {
       let finalTranscript = '';
-      let interimTranscript = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
           finalTranscript += transcript;
-        } else {
-          interimTranscript += transcript;
         }
       }
 
@@ -116,22 +113,22 @@ export default function ChatInput({ onSend, disabled = false }: ChatInputProps) 
       // For now, add file names to the message
       // In production, you'd upload to Supabase Storage
       const fileNames = Array.from(files).map(f => f.name).join(', ');
-      setMessage((prev) => prev ? `${prev}\n\n📎 Attached: ${fileNames}` : `📎 Attached: ${fileNames}`);
+      setMessage((prev) => prev ? `${prev}\n\nAttached: ${fileNames}` : `Attached: ${fileNames}`);
     };
     input.click();
   };
 
   return (
-    <div className="border-t border-gray-800/60 bg-gray-900/80 backdrop-blur-xl">
-      <div className="max-w-4xl mx-auto px-4 py-4">
-        <div className={`flex items-end gap-3 bg-gray-800/50 rounded-2xl border transition-all duration-200 ${
+    <div className="border-t border-gray-800/60 bg-gray-900/80 backdrop-blur-xl sticky bottom-0 z-20" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
+        <div className={`flex items-end gap-2 sm:gap-3 bg-gray-800/50 rounded-2xl border transition-all duration-200 ${
           isFocused ? 'border-blue-500/50 shadow-lg shadow-blue-500/10' : 'border-gray-700/50'
         }`}>
           {/* Attach Button */}
           <button
             onClick={handleFileAttach}
             disabled={disabled}
-            className="flex-shrink-0 p-3 text-gray-500 hover:text-cyan-400 transition-colors disabled:opacity-50"
+            className="flex-shrink-0 p-2.5 sm:p-3 text-gray-500 hover:text-cyan-400 transition-colors disabled:opacity-50"
             title="Attach file"
           >
             <Paperclip className="w-5 h-5" />
@@ -148,14 +145,14 @@ export default function ChatInput({ onSend, disabled = false }: ChatInputProps) 
             placeholder="Ask anything..."
             disabled={disabled}
             rows={1}
-            className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 resize-none outline-none py-3 text-sm sm:text-base max-h-[150px] disabled:opacity-50"
+            className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 resize-none outline-none py-2.5 sm:py-3 text-sm sm:text-base max-h-[150px] disabled:opacity-50 min-h-[44px]"
           />
 
           {/* Voice Button */}
           <button
             onClick={toggleVoiceRecording}
             disabled={disabled}
-            className={`flex-shrink-0 p-3 transition-all duration-200 disabled:opacity-50 ${
+            className={`flex-shrink-0 p-2.5 sm:p-3 transition-all duration-200 disabled:opacity-50 ${
               isRecording
                 ? 'text-red-500 animate-voice-pulse'
                 : 'text-gray-500 hover:text-cyan-400'
@@ -169,7 +166,7 @@ export default function ChatInput({ onSend, disabled = false }: ChatInputProps) 
           <button
             onClick={handleSubmit}
             disabled={!message.trim() || disabled}
-            className={`flex-shrink-0 p-3 rounded-xl transition-all duration-200 disabled:opacity-30 ${
+            className={`flex-shrink-0 p-2.5 sm:p-3 rounded-xl transition-all duration-200 disabled:opacity-30 ${
               message.trim() && !disabled
                 ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-500 hover:to-cyan-500 shadow-lg shadow-blue-500/20'
                 : 'text-gray-500'

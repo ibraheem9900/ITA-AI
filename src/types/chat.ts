@@ -29,7 +29,7 @@ export interface AIAgent {
   id: string;
   name: string;
   description: string;
-  icon: string;
+  icon: string; // Lucide icon name (e.g., 'Code', 'Search', 'Pen', 'FileText')
   color: string;
   system_prompt: string;
   status: 'active' | 'inactive' | 'coming_soon';
@@ -42,7 +42,7 @@ export interface AITool {
   id: string;
   name: string;
   description: string;
-  icon: string;
+  icon: string; // Lucide icon name
   category: 'productivity' | 'creative' | 'analysis';
   is_enabled: boolean;
   created_at: string;
@@ -86,15 +86,15 @@ export const MODEL_VERSIONS: ModelVersion[] = [
 export interface QuickAction {
   id: string;
   label: string;
-  icon: string;
+  icon: string; // Lucide icon name
   action: string;
 }
 
 export const MESSAGE_ACTIONS: QuickAction[] = [
-  { id: 'explain', label: 'Explain', icon: '💡', action: 'explain' },
-  { id: 'elaborate', label: 'Elaborate', icon: '🔍', action: 'elaborate' },
-  { id: 'rewrite-concise', label: 'Rewrite (Concise)', icon: '✏️', action: 'rewrite-concise' },
-  { id: 'rewrite-detailed', label: 'Rewrite (Detailed)', icon: '📝', action: 'rewrite-detailed' },
-  { id: 'summarize', label: 'Summarize', icon: '📋', action: 'summarize' },
-  { id: 'generate-code', label: 'Generate Code', icon: '💻', action: 'generate-code' },
+  { id: 'explain', label: 'Explain', icon: 'Lightbulb', action: 'explain' },
+  { id: 'elaborate', label: 'Elaborate', icon: 'Search', action: 'elaborate' },
+  { id: 'rewrite-concise', label: 'Rewrite (Concise)', icon: 'Pencil', action: 'rewrite-concise' },
+  { id: 'rewrite-detailed', label: 'Rewrite (Detailed)', icon: 'FileText', action: 'rewrite-detailed' },
+  { id: 'summarize', label: 'Summarize', icon: 'ListOrdered', action: 'summarize' },
+  { id: 'generate-code', label: 'Generate Code', icon: 'Code', action: 'generate-code' },
 ];

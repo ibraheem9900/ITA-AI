@@ -10,7 +10,7 @@ import ModelDropdown from './ModelDropdown';
 import { useAuth } from '../contexts/AuthContext';
 import { getConversationalResponse } from '../lib/conversationalAI';
 import { getAIResponse, generateSmartTitle, getQuickActionPrompt, clearConversationMemory } from '../lib/clientAI';
-import { Menu } from 'lucide-react';
+import { Menu, Users } from 'lucide-react';
 
 const APP_LOGO = '/1775218881775-3ee13392-9669-4d24-ae5f-9ac05cae51cf.png';
 
@@ -33,6 +33,7 @@ export default function ChatPage() {
   // ─── Panel State ─────────────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [agentsPanelOpen, setAgentsPanelOpen] = useState(false);
+  const [menuTooltipDismissed, setMenuTooltipDismissed] = useState(false);
   
   // ─── Data State ──────────────────────────────────────────────────────────────
   const [agents, setAgents] = useState<AIAgent[]>([]);
@@ -61,9 +62,11 @@ export default function ChatPage() {
     const savedName = localStorage.getItem('userName') || '';
     const savedPersonality = localStorage.getItem('aiPersonality') || 'general';
     const savedDarkMode = localStorage.getItem('darkMode') !== 'false';
+    const tooltipDismissed = localStorage.getItem('menuTooltipDismissed') === 'true';
     setUserName(savedName);
     setPersonality(savedPersonality);
     setDarkMode(savedDarkMode);
+    setMenuTooltipDismissed(tooltipDismissed);
   }, []);
 
   useEffect(() => {
@@ -136,7 +139,6 @@ export default function ChatPage() {
       setSelectedModel(data.selected_model);
       setFocusMode(data.focus_mode);
     } else if (error?.code === 'PGRST116') {
-      // No settings yet, create default
       await createUserSettings();
     }
   };
@@ -233,7 +235,6 @@ export default function ChatPage() {
       };
       setMessages((prev) => [...prev, userMessage]);
 
-      // Conversational detection — instant response, no API call
       const conversationalReply = getConversationalResponse(content, personality);
 
       if (conversationalReply) {
@@ -248,7 +249,6 @@ export default function ChatPage() {
         };
         setMessages((prev) => [...prev, assistantMessage]);
 
-        // Save to Supabase in background
         await supabase.from('messages').insert({ conversation_id: conversationId, role: 'user', content });
         await supabase.from('messages').insert({ conversation_id: conversationId, role: 'assistant', content: conversationalReply });
         await supabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId);
@@ -256,7 +256,6 @@ export default function ChatPage() {
         return;
       }
 
-      // Real query — call client-side AI directly
       await supabase.from('messages').insert({ conversation_id: conversationId, role: 'user', content });
 
       const aiResult = await getAIResponse(content, personality, conversationId, userName);
@@ -271,7 +270,6 @@ export default function ChatPage() {
       };
       setMessages((prev) => [...prev, assistantMessage]);
 
-      // Save to Supabase in background
       await supabase.from('messages').insert({
         conversation_id: conversationId, role: 'assistant',
         content: aiResult.response, sources: aiResult.sources,
@@ -329,8 +327,17 @@ export default function ChatPage() {
   };
 
   const handleAgentSelect = (agent: AIAgent) => {
-    // Start a new conversation with the agent's system prompt
     handleSendMessage(`I want to use the ${agent.name} agent. ${agent.description}`);
+  };
+
+  // ─── Hamburger Menu Handlers ─────────────────────────────────────────────────
+
+  const handleMenuClick = () => {
+    setSidebarOpen(true);
+    if (!menuTooltipDismissed) {
+      setMenuTooltipDismissed(true);
+      localStorage.setItem('menuTooltipDismissed', 'true');
+    }
   };
 
   // ─── Keyboard Shortcuts ──────────────────────────────────────────────────────
@@ -358,7 +365,7 @@ export default function ChatPage() {
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className={`flex flex-col lg:flex-row h-screen relative overflow-hidden circuit-bg ${
+    <div className={`flex flex-col lg:flex-row h-[100dvh] relative overflow-hidden circuit-bg ${
       focusMode ? 'focus-mode-active' : ''
     }`}>
       {/* ─── Left Sidebar ────────────────────────────────────────────────────── */}
@@ -376,18 +383,41 @@ export default function ChatPage() {
       {/* ─── Main Chat Area ──────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden chat-main">
         {/* Top Bar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/60 bg-gray-900/50 backdrop-blur-xl z-10">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-b border-gray-800/60 bg-gray-900/50 backdrop-blur-xl z-10 flex-shrink-0">
           {/* Left: Menu + Logo */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="p-2 rounded-lg hover:bg-gray-800/50 text-gray-400 hover:text-white transition-colors lg:hidden"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Hamburger Menu with Tooltip */}
+            <div className="relative lg:hidden">
+              <button
+                onClick={handleMenuClick}
+                className={`p-2 rounded-lg hover:bg-gray-800/50 text-gray-400 hover:text-white transition-colors ${
+                  !menuTooltipDismissed ? 'animate-pulse-glow' : ''
+                }`}
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              
+              {/* First-visit tooltip */}
+              {!menuTooltipDismissed && (
+                <div className="absolute top-full left-0 mt-2 w-48 p-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl animate-slide-down z-50">
+                  <p className="text-xs text-gray-300">Explore agents & tools</p>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuTooltipDismissed(true);
+                      localStorage.setItem('menuTooltipDismissed', 'true');
+                    }}
+                    className="mt-1 text-[10px] text-cyan-400 hover:text-cyan-300"
+                  >
+                    Got it
+                  </button>
+                </div>
+              )}
+            </div>
+            
             <div className="flex items-center gap-2">
-              <img src={APP_LOGO} alt="ITA" className="w-7 h-7" />
-              <span className="text-lg font-bold text-white hidden sm:block">ITA</span>
+              <img src={APP_LOGO} alt="ITA" className="w-6 h-6 sm:w-7 sm:h-7" />
+              <span className="text-base sm:text-lg font-bold text-white hidden sm:block">ITA</span>
             </div>
           </div>
 
@@ -397,7 +427,7 @@ export default function ChatPage() {
           </div>
 
           {/* Right: Focus Mode + Profile */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* Focus Mode Toggle */}
             <div className="hidden sm:flex items-center gap-2">
               <span className="text-xs text-gray-500">Focus Mode</span>
@@ -414,12 +444,12 @@ export default function ChatPage() {
             </div>
 
             {/* User Profile */}
-            <div className="flex items-center gap-2 pl-3 border-l border-gray-700/50">
-              <span className="text-sm font-medium text-gray-300 hidden sm:block">{getDisplayName()}</span>
+            <div className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-700/50">
+              <span className="text-xs sm:text-sm font-medium text-gray-300 hidden sm:block">{getDisplayName()}</span>
               {getUserAvatar() ? (
-                <img src={getUserAvatar()} alt={getDisplayName()} className="w-8 h-8 rounded-full border border-gray-700" />
+                <img src={getUserAvatar()} alt={getDisplayName()} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-gray-700" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-white text-sm font-medium">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-white text-xs sm:text-sm font-medium">
                   {getDisplayName().charAt(0).toUpperCase()}
                 </div>
               )}
@@ -431,24 +461,22 @@ export default function ChatPage() {
               className="p-2 rounded-lg hover:bg-gray-800/50 text-gray-400 hover:text-cyan-400 transition-colors xl:hidden"
               title="AI Agents"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
+              <Users className="w-5 h-5" />
             </button>
           </div>
         </div>
 
         {/* Chat Messages */}
         {messages.length === 0 && !loading ? (
-          <div className="flex-1 themed-scroll flex items-center justify-center px-4 py-8">
+          <div className="flex-1 themed-scroll flex items-center justify-center px-4 py-6 sm:py-8">
             <div className="text-center max-w-lg w-full animate-slide-down">
-              <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-blue-600/30 to-cyan-500/30 rounded-3xl mb-6 shadow-2xl shadow-blue-500/20 animate-pulse-glow border border-blue-500/20">
-                <img src={APP_LOGO} alt="ITA AI" className="w-14 h-14" />
+              <div className="inline-flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-blue-600/30 to-cyan-500/30 rounded-3xl mb-4 sm:mb-6 shadow-2xl shadow-blue-500/20 animate-pulse-glow border border-blue-500/20">
+                <img src={APP_LOGO} alt="ITA AI" className="w-12 h-12 sm:w-14 sm:h-14" />
               </div>
-              <h2 className="text-3xl sm:text-4xl font-black mb-3 gradient-text-animated">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-2 sm:mb-3 gradient-text-animated">
                 {greetingText}, {getDisplayName()}
               </h2>
-              <p className="text-gray-500 text-base h-6 transition-all duration-500 mb-8">
+              <p className="text-gray-500 text-sm sm:text-base h-6 transition-all duration-500 mb-6 sm:mb-8">
                 {subtexts[subtextIndex]}
               </p>
               
@@ -463,7 +491,7 @@ export default function ChatPage() {
                   <button
                     key={suggestion}
                     onClick={() => handleSendMessage(suggestion)}
-                    className="px-4 py-2 rounded-full text-sm bg-gray-800/50 hover:bg-gray-800 text-gray-400 hover:text-cyan-400 border border-gray-700/50 hover:border-cyan-500/30 transition-all duration-200"
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm bg-gray-800/50 hover:bg-gray-800 text-gray-400 hover:text-cyan-400 border border-gray-700/50 hover:border-cyan-500/30 transition-all duration-200"
                   >
                     {suggestion}
                   </button>
