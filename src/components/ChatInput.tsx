@@ -1,120 +1,196 @@
-import { useState, useRef } from 'react';
-import { Send, Mic, MicOff } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Send, Paperclip, Mic, MicOff, Loader2 } from 'lucide-react';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
-  disabled: boolean;
+  disabled?: boolean;
 }
 
-export default function ChatInput({ onSend, disabled }: ChatInputProps) {
-  const [input, setInput] = useState('');
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
+export default function ChatInput({ onSend, disabled = false }: ChatInputProps) {
+  const [message, setMessage] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<any>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    submit();
-  };
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 150) + 'px';
+    }
+  }, [message]);
 
-  const submit = () => {
-    if (input.trim() && !disabled) {
-      onSend(input.trim());
-      setInput('');
-      if (textareaRef.current) {
-        textareaRef.current.style.height = '48px';
+  // Cleanup speech recognition on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
       }
+    };
+  }, []);
+
+  const handleSubmit = () => {
+    const trimmed = message.trim();
+    if (!trimmed || disabled) return;
+    onSend(trimmed);
+    setMessage('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      submit();
+      handleSubmit();
     }
   };
 
-  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
-    const el = e.target;
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
-  };
+  // ─── Voice Input (Web Speech API) ─────────────────────────────────────────
 
-  const toggleVoice = () => {
-    if (isListening) {
+  const toggleVoiceRecording = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert('Voice input is not supported in your browser. Please try Chrome.');
+      return;
+    }
+
+    if (isRecording) {
       recognitionRef.current?.stop();
-      setIsListening(false);
+      setIsRecording(false);
       return;
     }
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) {
-      alert('Voice input is not supported in this browser. Please use Chrome or Edge.');
-      return;
-    }
-    const recognition = new SR();
-    recognitionRef.current = recognition;
-    recognition.continuous = false;
-    recognition.interimResults = false;
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.lang = 'en-US';
-    recognition.onstart  = () => setIsListening(true);
-    recognition.onresult = (event: any) => {
-      const t = event.results[0][0].transcript;
-      setInput((prev) => (prev ? prev + ' ' + t : t));
+
+    recognition.onstart = () => {
+      setIsRecording(true);
     };
-    recognition.onend    = () => setIsListening(false);
-    recognition.onerror  = () => setIsListening(false);
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        setMessage((prev) => (prev ? prev + ' ' + finalTranscript : finalTranscript));
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognitionRef.current = recognition;
     recognition.start();
   };
 
-  return (
-    <form onSubmit={handleSubmit} className="border-t border-gray-800/50 glass p-3 sm:p-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-end gap-2">
-          <div className="flex-1 relative">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={handleInput}
-              onKeyDown={handleKeyDown}
-              disabled={disabled}
-              placeholder="Ask anything..."
-              rows={1}
-              className="w-full px-4 py-3 bg-gray-800/70 border border-gray-700/70 hover:border-gray-600 focus:border-blue-500 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm resize-none"
-              style={{ minHeight: '48px', maxHeight: '160px' }}
-            />
-          </div>
+  // ─── File Attach Handler ──────────────────────────────────────────────────
 
+  const handleFileAttach = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.accept = 'image/*,.pdf,.doc,.docx,.txt,.csv,.json';
+    input.onchange = async (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (!files?.length) return;
+      
+      // For now, add file names to the message
+      // In production, you'd upload to Supabase Storage
+      const fileNames = Array.from(files).map(f => f.name).join(', ');
+      setMessage((prev) => prev ? `${prev}\n\n📎 Attached: ${fileNames}` : `📎 Attached: ${fileNames}`);
+    };
+    input.click();
+  };
+
+  return (
+    <div className="border-t border-gray-800/60 bg-gray-900/80 backdrop-blur-xl">
+      <div className="max-w-4xl mx-auto px-4 py-4">
+        <div className={`flex items-end gap-3 bg-gray-800/50 rounded-2xl border transition-all duration-200 ${
+          isFocused ? 'border-blue-500/50 shadow-lg shadow-blue-500/10' : 'border-gray-700/50'
+        }`}>
+          {/* Attach Button */}
           <button
-            type="button"
-            onClick={toggleVoice}
+            onClick={handleFileAttach}
             disabled={disabled}
-            title={isListening ? 'Stop' : 'Voice input'}
-            className={`flex-shrink-0 p-3 rounded-xl transition-all duration-200 disabled:opacity-50 active:scale-90 ${
-              isListening
-                ? 'bg-red-600 hover:bg-red-700 text-white animate-voice-pulse'
-                : 'bg-gray-800/70 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700/70'
-            }`}
+            className="flex-shrink-0 p-3 text-gray-500 hover:text-cyan-400 transition-colors disabled:opacity-50"
+            title="Attach file"
           >
-            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            <Paperclip className="w-5 h-5" />
           </button>
 
+          {/* Text Input */}
+          <textarea
+            ref={textareaRef}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            placeholder="Ask anything..."
+            disabled={disabled}
+            rows={1}
+            className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 resize-none outline-none py-3 text-sm sm:text-base max-h-[150px] disabled:opacity-50"
+          />
+
+          {/* Voice Button */}
           <button
-            type="submit"
-            disabled={disabled || !input.trim()}
-            className="btn-primary flex-shrink-0 p-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20 active:scale-90"
+            onClick={toggleVoiceRecording}
+            disabled={disabled}
+            className={`flex-shrink-0 p-3 transition-all duration-200 disabled:opacity-50 ${
+              isRecording
+                ? 'text-red-500 animate-voice-pulse'
+                : 'text-gray-500 hover:text-cyan-400'
+            }`}
+            title={isRecording ? 'Stop recording' : 'Voice input'}
           >
-            <Send className="w-5 h-5" />
+            {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          </button>
+
+          {/* Send Button */}
+          <button
+            onClick={handleSubmit}
+            disabled={!message.trim() || disabled}
+            className={`flex-shrink-0 p-3 rounded-xl transition-all duration-200 disabled:opacity-30 ${
+              message.trim() && !disabled
+                ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:from-blue-500 hover:to-cyan-500 shadow-lg shadow-blue-500/20'
+                : 'text-gray-500'
+            }`}
+          >
+            {disabled ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Send className="w-5 h-5" />
+            )}
           </button>
         </div>
 
-        {isListening && (
-          <div className="flex items-center gap-2 mt-2 px-1 animate-fade-in">
-            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-            <span className="text-xs text-red-400">Listening… speak now</span>
+        {/* Voice Recording Indicator */}
+        {isRecording && (
+          <div className="flex items-center justify-center gap-2 mt-2 text-red-400 text-xs animate-pulse">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-voice-pulse" />
+            <span>Recording... Click to stop</span>
           </div>
         )}
       </div>
-    </form>
+    </div>
   );
 }

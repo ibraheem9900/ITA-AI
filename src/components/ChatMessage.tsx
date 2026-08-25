@@ -1,16 +1,16 @@
 import ReactMarkdown from 'react-markdown';
-import { Message } from '../types/chat';
-import { User, ExternalLink, Globe, ChevronDown, ChevronUp, Copy, Check, Sparkles } from 'lucide-react';
+import { Message, MESSAGE_ACTIONS } from '../types/chat';
+import { User, ExternalLink, Globe, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
 import { useState } from 'react';
 
 interface ChatMessageProps {
   message: Message;
-  onQuickAction?: (action: string) => void;
+  onAction?: (action: string) => void;
 }
 
 const APP_LOGO = '/1775218881775-3ee13392-9669-4d24-ae5f-9ac05cae51cf.png';
 
-export default function ChatMessage({ message, onQuickAction }: ChatMessageProps) {
+export default function ChatMessage({ message, onAction }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [showSources, setShowSources] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -21,12 +21,33 @@ export default function ChatMessage({ message, onQuickAction }: ChatMessageProps
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Get relevant actions based on message content
+  const getRelevantActions = () => {
+    const content = message.content.toLowerCase();
+    const hasCode = content.includes('```') || content.includes('function') || content.includes('class');
+    const hasLongText = message.content.length > 200;
+    
+    // Always show core actions for AI messages
+    const actions = MESSAGE_ACTIONS.filter(action => {
+      if (action.id === 'generate-code') return hasCode;
+      if (action.id === 'summarize') return hasLongText;
+      return true;
+    });
+    
+    return actions.slice(0, 6); // Max 6 actions
+  };
+
   return (
-    <div className={`flex gap-3 sm:gap-4 px-4 sm:px-6 py-4 animate-slide-up ${
-      isUser ? 'bg-gray-900/40' : 'bg-gradient-to-r from-gray-900/60 to-blue-950/20'
+    <div className={`flex gap-4 px-6 py-5 animate-slide-up ${
+      isUser 
+        ? 'bg-transparent' 
+        : 'bg-gradient-to-r from-gray-900/40 via-gray-900/60 to-gray-900/40'
     }`}>
-      <div className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden ${
-        isUser ? 'bg-gradient-to-br from-blue-600 to-cyan-600' : 'bg-gradient-to-br from-slate-800 to-gray-800 border border-gray-700'
+      {/* Avatar */}
+      <div className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden ${
+        isUser 
+          ? 'bg-gradient-to-br from-blue-600 to-cyan-600' 
+          : 'bg-gradient-to-br from-slate-800 to-gray-800 border border-gray-700'
       }`}>
         {isUser
           ? <User className="w-4 h-4 text-white" />
@@ -35,25 +56,25 @@ export default function ChatMessage({ message, onQuickAction }: ChatMessageProps
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1.5">
-          <p className={`text-[11px] font-semibold uppercase tracking-wider ${
+        {/* Message Header */}
+        <div className="flex items-center gap-2 mb-2">
+          <span className={`text-xs font-semibold uppercase tracking-wider ${
             isUser ? 'text-blue-400' : 'text-cyan-400'
           }`}>
-            {isUser ? 'You' : 'ITA AI'}
-          </p>
+            {isUser ? 'YOU' : 'ITA AI'}
+          </span>
           {!isUser && (
-            <div className="flex items-center gap-1 ml-auto">
-              <button
-                onClick={handleCopy}
-                className="p-1 rounded-lg hover:bg-gray-800/50 text-gray-500 hover:text-cyan-400 transition-colors"
-                title="Copy message"
-              >
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
-            </div>
+            <button
+              onClick={handleCopy}
+              className="ml-auto p-1.5 rounded-lg hover:bg-gray-800/50 text-gray-500 hover:text-cyan-400 transition-colors"
+              title="Copy message"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
           )}
         </div>
 
+        {/* Message Content */}
         {isUser ? (
           <div className="text-gray-100 leading-relaxed text-sm sm:text-base break-words whitespace-pre-wrap">
             {message.content}
@@ -62,7 +83,6 @@ export default function ChatMessage({ message, onQuickAction }: ChatMessageProps
           <div className="markdown-body text-sm sm:text-base break-words">
             <ReactMarkdown
               components={{
-                // Custom code block rendering with copy button
                 code({ className, children, ...props }) {
                   const match = /language-(\w+)/.exec(className || '');
                   const isInline = !match && !className;
@@ -99,7 +119,6 @@ export default function ChatMessage({ message, onQuickAction }: ChatMessageProps
                     </div>
                   );
                 },
-                // Custom link rendering
                 a({ href, children }) {
                   return (
                     <a
@@ -112,7 +131,6 @@ export default function ChatMessage({ message, onQuickAction }: ChatMessageProps
                     </a>
                   );
                 },
-                // Custom list rendering
                 ul({ children }) {
                   return (
                     <ul className="list-disc list-inside space-y-1 my-2 text-gray-200">
@@ -127,13 +145,11 @@ export default function ChatMessage({ message, onQuickAction }: ChatMessageProps
                     </ol>
                   );
                 },
-                // Custom paragraph rendering
                 p({ children }) {
                   return (
                     <p className="my-2 leading-relaxed text-gray-100">{children}</p>
                   );
                 },
-                // Custom heading rendering
                 h1({ children }) {
                   return <h1 className="text-xl font-bold text-white mt-4 mb-2">{children}</h1>;
                 },
@@ -143,7 +159,6 @@ export default function ChatMessage({ message, onQuickAction }: ChatMessageProps
                 h3({ children }) {
                   return <h3 className="text-base font-semibold text-white mt-2 mb-1">{children}</h3>;
                 },
-                // Custom blockquote rendering
                 blockquote({ children }) {
                   return (
                     <blockquote className="border-l-4 border-cyan-500/50 pl-4 my-3 italic text-gray-300">
@@ -158,25 +173,23 @@ export default function ChatMessage({ message, onQuickAction }: ChatMessageProps
           </div>
         )}
 
-        {/* Quick action buttons for AI messages */}
-        {!isUser && onQuickAction && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            <button
-              onClick={() => onQuickAction('explain')}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-800/50 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-cyan-400 transition-colors border border-gray-700/50"
-            >
-              <Sparkles className="w-3 h-3" /> Explain
-            </button>
-            <button
-              onClick={() => onQuickAction('elaborate')}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-800/50 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-cyan-400 transition-colors border border-gray-700/50"
-            >
-              <Sparkles className="w-3 h-3" /> Elaborate
-            </button>
+        {/* Quick Action Buttons */}
+        {!isUser && onAction && (
+          <div className="flex flex-wrap gap-2 mt-4">
+            {getRelevantActions().map((action) => (
+              <button
+                key={action.id}
+                onClick={() => onAction(action.action)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-800/50 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-cyan-400 transition-all duration-200 border border-gray-700/50 hover:border-cyan-500/30"
+              >
+                <span>{action.icon}</span>
+                <span>{action.label}</span>
+              </button>
+            ))}
           </div>
         )}
 
-        {/* Sources section */}
+        {/* Sources Section */}
         {message.sources && message.sources.length > 0 && (
           <div className="mt-4">
             <button

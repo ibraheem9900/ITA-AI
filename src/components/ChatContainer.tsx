@@ -405,7 +405,7 @@ export default function ChatContainer() {
         ) : (
           <div ref={chatContainerRef} className="flex-1 themed-scroll">
             {messages.map((message) => (
-              <ChatMessage key={message.id} message={message} onQuickAction={handleQuickAction} />
+              <ChatMessage key={message.id} message={message} onAction={handleQuickAction} />
             ))}
             {loading && <LoadingMessage />}
             <div ref={messagesEndRef} className="h-4" />

@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Auth from './components/Auth';
 import AuthCallback from './components/AuthCallback';
-import ChatContainer from './components/ChatContainer';
+import ChatPage from './components/ChatPage';
 
 const APP_LOGO = '/1775218881775-3ee13392-9669-4d24-ae5f-9ac05cae51cf.png';
 
@@ -67,11 +67,11 @@ function AppContent() {
       {/* All other routes */}
       <Route
         path="*"
-        element={user ? <ChatContainer /> : <Navigate to="/" replace />}
+        element={user ? <ChatPage /> : <Navigate to="/" replace />}
       />
       <Route
         path="/"
-        element={user ? <ChatContainer /> : <Auth />}
+        element={user ? <ChatPage /> : <Auth />}
       />
     </Routes>
   );
