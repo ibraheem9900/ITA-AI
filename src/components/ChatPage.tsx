@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Conversation, Message, AIAgent, AITool, UserSettings } from '../types/chat';
 import ConversationSidebar from './ConversationSidebar';
@@ -16,6 +17,7 @@ const APP_LOGO = '/1775218881775-3ee13392-9669-4d24-ae5f-9ac05cae51cf.png';
 
 export default function ChatPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   
   // ─── Core State ──────────────────────────────────────────────────────────────
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -386,20 +388,24 @@ export default function ChatPage() {
         <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-b border-gray-800/60 bg-gray-900/50 backdrop-blur-xl z-10 flex-shrink-0">
           {/* Left: Menu + Logo */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Hamburger Menu with Tooltip */}
+            {/* Hamburger Menu with Glow + Tooltip for first-time mobile users */}
             <div className="relative lg:hidden">
               <button
                 onClick={handleMenuClick}
-                className={`p-2 rounded-lg hover:bg-gray-800/50 text-gray-400 hover:text-white transition-colors ${
-                  !menuTooltipDismissed ? 'animate-pulse-glow' : ''
+                className={`p-2.5 rounded-xl hover:bg-gray-800/50 text-gray-400 hover:text-white transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center ${
+                  !menuTooltipDismissed ? 'animate-menu-glow text-cyan-400' : ''
                 }`}
               >
                 <Menu className="w-5 h-5" />
               </button>
               
-              {/* First-visit tooltip */}
+              {/* First-visit tooltip callout */}
               {!menuTooltipDismissed && (
-                <div className="absolute top-full left-0 mt-2 w-48 p-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl animate-slide-down z-50">
+                <div className="absolute top-full left-0 mt-2 w-52 p-3 bg-gray-800 border border-cyan-500/30 rounded-xl shadow-xl shadow-cyan-500/10 animate-slide-down z-50">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" />
+                    <p className="text-xs font-medium text-cyan-400">New to ITA?</p>
+                  </div>
                   <p className="text-xs text-gray-300">Explore agents & tools</p>
                   <button
                     onClick={(e) => {
@@ -407,7 +413,7 @@ export default function ChatPage() {
                       setMenuTooltipDismissed(true);
                       localStorage.setItem('menuTooltipDismissed', 'true');
                     }}
-                    className="mt-1 text-[10px] text-cyan-400 hover:text-cyan-300"
+                    className="mt-2 w-full py-1.5 text-[11px] font-medium text-cyan-400 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg transition-colors"
                   >
                     Got it
                   </button>
@@ -443,8 +449,11 @@ export default function ChatPage() {
               </button>
             </div>
 
-            {/* User Profile */}
-            <div className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-700/50">
+            {/* User Profile — clickable to /account */}
+            <button
+              onClick={() => navigate('/account')}
+              className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-700/50 hover:bg-gray-800/30 rounded-lg py-1 px-2 transition-colors"
+            >
               <span className="text-xs sm:text-sm font-medium text-gray-300 hidden sm:block">{getDisplayName()}</span>
               {getUserAvatar() ? (
                 <img src={getUserAvatar()} alt={getDisplayName()} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-gray-700" />
@@ -453,15 +462,16 @@ export default function ChatPage() {
                   {getDisplayName().charAt(0).toUpperCase()}
                 </div>
               )}
-            </div>
+            </button>
 
-            {/* Agents Panel Toggle */}
+            {/* Agents Panel Toggle — visible tappable button on mobile */}
             <button
               onClick={() => setAgentsPanelOpen(true)}
-              className="p-2 rounded-lg hover:bg-gray-800/50 text-gray-400 hover:text-cyan-400 transition-colors xl:hidden"
-              title="AI Agents"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/40 transition-all duration-200 xl:hidden"
+              title="Switch to a specialized assistant"
             >
-              <Users className="w-5 h-5" />
+              <Users className="w-4 h-4 text-cyan-400" />
+              <span className="text-[11px] font-medium text-cyan-400 hidden sm:inline">Agents</span>
             </button>
           </div>
         </div>

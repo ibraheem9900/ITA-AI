@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Auth from './components/Auth';
 import AuthCallback from './components/AuthCallback';
 import ChatPage from './components/ChatPage';
+import ProfilePage from './components/ProfilePage';
 
 const APP_LOGO = '/1775218881775-3ee13392-9669-4d24-ae5f-9ac05cae51cf.png';
 
@@ -63,6 +64,12 @@ function AppContent() {
     <Routes>
       {/* OAuth callback route — always rendered, no auth gate */}
       <Route path="/auth/callback" element={<AuthCallback />} />
+
+      {/* Profile / Account page */}
+      <Route
+        path="/account"
+        element={user ? <ProfilePage /> : <Navigate to="/" replace />}
+      />
 
       {/* All other routes */}
       <Route
