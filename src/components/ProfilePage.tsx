@@ -82,7 +82,6 @@ export default function ProfilePage() {
 
   // Avatar upload state
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   // Password change state
   const [showPasswordSection, setShowPasswordSection] = useState(false);
@@ -139,13 +138,11 @@ export default function ProfilePage() {
         })
       : 'Unknown';
 
-    // Total conversations
     const { count: convCount } = await supabase
       .from('conversations')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id);
 
-    // Total messages across all conversations
     const { count: msgCount } = await supabase
       .from('messages')
       .select('*', { count: 'exact', head: true })
@@ -153,7 +150,6 @@ export default function ProfilePage() {
         (await supabase.from('conversations').select('id').eq('user_id', user.id)).data?.map(c => c.id) || []
       );
 
-    // Last active - most recent conversation update
     const { data: lastConv } = await supabase
       .from('conversations')
       .select('updated_at')
@@ -175,7 +171,6 @@ export default function ProfilePage() {
   const loadIntegrations = async () => {
     if (!user) return;
     
-    // Check which providers the user has connected
     const providers = user.identities?.map(i => i.provider) || [];
     const emailIdentity = user.identities?.find(i => i.provider === 'email');
     
@@ -238,13 +233,11 @@ export default function ProfilePage() {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file');
       return;
     }
 
-    // Validate file size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
       alert('Image must be less than 2MB');
       return;
@@ -253,12 +246,6 @@ export default function ProfilePage() {
     setUploadingAvatar(true);
     
     try {
-      // Create preview
-      const reader = new FileReader();
-      reader.onload = (ev) => setAvatarPreview(ev.target?.result as string);
-      reader.readAsDataURL(file);
-
-      // Upload to Supabase Storage
       const fileExt = file.name.split('.').pop();
       const filePath = `avatars/${user.id}.${fileExt}`;
 
@@ -266,12 +253,34 @@ export default function ProfilePage() {
         .from('avatars')
         .upload(filePath, file, { upsert: true });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        // If bucket doesn't exist, try creating it
+        if (uploadError.message?.includes('not found') || uploadError.message?.includes('Bucket not found')) {
+          const { error: bucketError } = await supabase.storage.createBucket('avatars', {
+            public: true,
+            allowedMimeTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'],
+            fileSizeLimit: 2 * 1024 * 1024,
+          });
+          
+          if (bucketError && !bucketError.message?.includes('already exists')) {
+            throw bucketError;
+          }
+          
+          // Retry upload
+          const { error: retryError } = await supabase.storage
+            .from('avatars')
+            .upload(filePath, file, { upsert: true });
+          
+          if (retryError) throw retryError;
+        } else {
+          throw uploadError;
+        }
+      }
 
-      // Get public URL
+      // Get public URL with cache-busting
       const { data: urlData } = supabase.storage
         .from('avatars')
-        .getPublicUrl(filePath);
+        .getPublicUrl(`${filePath}?t=${Date.now()}`);
 
       const avatarUrl = urlData.publicUrl;
 
@@ -286,9 +295,12 @@ export default function ProfilePage() {
     } catch (err) {
       console.error('Avatar upload failed:', err);
       alert('Failed to upload avatar. Please try again.');
-      setAvatarPreview(null);
     } finally {
       setUploadingAvatar(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -302,7 +314,6 @@ export default function ProfilePage() {
       if (error) throw error;
       
       setProfile((prev) => ({ ...prev, avatar_url: '' }));
-      setAvatarPreview(null);
     } catch (err) {
       console.error('Failed to remove avatar:', err);
     }
@@ -336,7 +347,6 @@ export default function ProfilePage() {
 
     setChangingPassword(true);
     try {
-      // Re-authenticate with current password first
       const { error: authError } = await supabase.auth.signInWithPassword({
         email: profile.email,
         password: currentPassword,
@@ -348,7 +358,6 @@ export default function ProfilePage() {
         return;
       }
 
-      // Update password
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });
@@ -435,9 +444,9 @@ export default function ProfilePage() {
       {/* Avatar Section */}
       <div className="flex flex-col items-center pb-4 border-b border-gray-800">
         <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
-          {profile.avatar_url || avatarPreview ? (
+          {profile.avatar_url ? (
             <img
-              src={avatarPreview || profile.avatar_url}
+              src={profile.avatar_url}
               alt="Profile"
               className="w-24 h-24 rounded-full object-cover border-4 border-gray-800"
             />
@@ -459,7 +468,6 @@ export default function ProfilePage() {
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          capture="user"
           onChange={handleAvatarChange}
           className="hidden"
         />
@@ -470,7 +478,7 @@ export default function ProfilePage() {
           >
             Change Photo
           </button>
-          {(profile.avatar_url || avatarPreview) && (
+          {profile.avatar_url && (
             <>
               <span className="text-gray-600">·</span>
               <button
@@ -487,7 +495,7 @@ export default function ProfilePage() {
       {/* Editable Fields */}
       {[
         { label: 'Full Name', field: 'full_name', value: profile.full_name, icon: <User className="w-4 h-4" /> },
-        { label: 'Username', field: 'username', value: profile.username, icon: <AtSign className="w-4 h-4" /> },
+        { label: 'Username', field: 'username', value: profile.username, icon: <span className="text-xs font-bold">@</span> },
         { label: 'Phone', field: 'phone', value: profile.phone, icon: <Phone className="w-4 h-4" /> },
         { label: 'Timezone', field: 'timezone', value: profile.timezone, icon: <Clock className="w-4 h-4" /> },
         { label: 'Language', field: 'language', value: profile.language, icon: <Globe className="w-4 h-4" /> },
@@ -783,10 +791,10 @@ export default function ProfilePage() {
   }) => (
     <button
       onClick={onClick}
-      className="w-full text-left glass rounded-2xl p-5 border border-gray-800/50 hover:border-blue-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/5 cursor-pointer group"
+      className="w-full text-left glass rounded-2xl p-4 sm:p-5 border border-gray-800/50 hover:border-blue-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/5 cursor-pointer group"
     >
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs sm:text-sm font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-2">
           {icon}
           {title}
         </h3>
@@ -800,8 +808,66 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-[100dvh] bg-gray-950 circuit-bg flex flex-col lg:flex-row">
-      {/* ─── Left Sidebar Navigation ────────────────────────────────────── */}
-      <aside className="w-full lg:w-64 flex-shrink-0 border-b lg:border-b-0 lg:border-r border-gray-800/60 bg-gray-900/80 backdrop-blur-xl">
+      
+      {/* ─── Mobile Top Nav (Horizontal Scroll) ───────────────────────────── */}
+      <div className="lg:hidden sticky top-0 z-20 bg-gray-900/95 backdrop-blur-xl border-b border-gray-800/60">
+        {/* Back + Title Row */}
+        <div className="flex items-center justify-between px-4 py-3">
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back</span>
+          </button>
+          <h1 className="text-sm font-semibold text-white">Account and Settings</h1>
+          <div className="w-16" /> {/* Spacer */}
+        </div>
+        
+        {/* Horizontal Scrollable Nav Pills */}
+        <div className="flex items-center gap-2 px-4 pb-3 overflow-x-auto scrollbar-hide">
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeNav === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  if (item.comingSoon) return;
+                  setActiveNav(item.id);
+                }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-200 flex-shrink-0 ${
+                  isActive
+                    ? 'bg-gradient-to-r from-blue-600/30 to-cyan-600/20 text-white border border-blue-500/30 shadow-lg shadow-blue-500/10'
+                    : item.comingSoon
+                    ? 'bg-gray-800/30 text-gray-600 cursor-not-allowed border border-gray-800/50'
+                    : 'bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white border border-gray-700/30'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{item.label}</span>
+                {item.comingSoon && (
+                  <span className="text-[9px] px-1.5 py-0.5 bg-gray-700/50 text-gray-500 rounded-full border border-gray-600/30">
+                    Soon
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          
+          {/* Log Out Pill */}
+          <button
+            onClick={handleSignOut}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium whitespace-nowrap bg-red-600/10 text-red-400 hover:bg-red-600/20 border border-red-500/20 flex-shrink-0"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Log Out</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ─── Left Sidebar (Desktop Only) ──────────────────────────────────── */}
+      <aside className="hidden lg:flex w-64 flex-shrink-0 border-r border-gray-800/60 bg-gray-900/80 backdrop-blur-xl flex-col">
         {/* Back to Chat */}
         <div className="p-4 border-b border-gray-800/60">
           <button
@@ -814,7 +880,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Nav Items */}
-        <nav className="p-3">
+        <nav className="p-3 flex-1">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = activeNav === item.id;
@@ -847,7 +913,7 @@ export default function ProfilePage() {
         </nav>
 
         {/* Sign Out */}
-        <div className="p-3 border-t border-gray-800/60 mt-auto">
+        <div className="p-3 border-t border-gray-800/60">
           <button
             onClick={handleSignOut}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition-all duration-200"
@@ -860,32 +926,27 @@ export default function ProfilePage() {
 
       {/* ─── Main Content ───────────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 z-10 bg-gray-950/80 backdrop-blur-xl border-b border-gray-800/60 px-4 sm:px-6 py-4">
-          <h1 className="text-xl font-bold text-white">Account and Settings</h1>
-        </div>
-
-        <div className="p-4 sm:p-6 lg:p-8 max-w-5xl">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
           {/* ─── Profile Header Card ────────────────────────────────────── */}
-          <div className="glass rounded-2xl p-6 sm:p-8 mb-6 text-center border border-gray-800/50">
+          <div className="glass rounded-2xl p-5 sm:p-6 mb-5 text-center border border-gray-800/50">
             {/* Avatar */}
             <div 
               onClick={handleAvatarClick}
-              className="relative w-24 h-24 mx-auto mb-4 cursor-pointer group"
+              className="relative w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-3 cursor-pointer group"
             >
               {profile.avatar_url ? (
                 <img
                   src={profile.avatar_url}
                   alt="Profile"
-                  className="w-24 h-24 rounded-full object-cover border-4 border-gray-900 shadow-xl shadow-blue-500/20"
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-gray-900 shadow-xl shadow-blue-500/20"
                 />
               ) : (
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-3xl font-bold text-white border-4 border-gray-900 shadow-xl shadow-blue-500/20">
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-2xl sm:text-3xl font-bold text-white border-4 border-gray-900 shadow-xl shadow-blue-500/20">
                   {profile.full_name?.charAt(0).toUpperCase() || 'U'}
                 </div>
               )}
               <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <Camera className="w-6 h-6 text-white" />
+                <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               {uploadingAvatar && (
                 <div className="absolute inset-0 rounded-full bg-black/70 flex items-center justify-center">
@@ -893,8 +954,8 @@ export default function ProfilePage() {
                 </div>
               )}
             </div>
-            <h2 className="text-2xl font-bold text-white mb-1">{profile.full_name || 'User'}</h2>
-            <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
+            <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">{profile.full_name || 'User'}</h2>
+            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-gray-400">
               <span className="w-2 h-2 bg-green-500 rounded-full" />
               <span>Online</span>
               <span>·</span>
@@ -903,7 +964,7 @@ export default function ProfilePage() {
           </div>
 
           {/* ─── Trello-style Cards Grid ─────────────────────────────────── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             
             {/* Profile Overview Card */}
             <DashboardCard
@@ -912,16 +973,16 @@ export default function ProfilePage() {
               onClick={() => setModal({ type: 'profile' })}
             >
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <Mail className="w-3.5 h-3.5 text-gray-500" />
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-300">
+                  <Mail className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                   <span className="truncate">{profile.email}</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <Phone className="w-3.5 h-3.5 text-gray-500" />
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-300">
+                  <Phone className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                   <span>{profile.phone || 'Not set'}</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-300">
-                  <Globe className="w-3.5 h-3.5 text-gray-500" />
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-300">
+                  <Globe className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                   <span>{profile.language}</span>
                 </div>
               </div>
@@ -933,13 +994,13 @@ export default function ProfilePage() {
               icon={<MessageSquare className="w-3.5 h-3.5" />}
               onClick={() => setModal({ type: 'metrics' })}
             >
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-800/30 rounded-lg p-3">
-                  <p className="text-lg font-bold text-white">{metrics.totalChats}</p>
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div className="bg-gray-800/30 rounded-lg p-2.5 sm:p-3">
+                  <p className="text-base sm:text-lg font-bold text-white">{metrics.totalChats}</p>
                   <p className="text-[10px] text-gray-500">Chats</p>
                 </div>
-                <div className="bg-gray-800/30 rounded-lg p-3">
-                  <p className="text-lg font-bold text-white">{metrics.totalMessages}</p>
+                <div className="bg-gray-800/30 rounded-lg p-2.5 sm:p-3">
+                  <p className="text-base sm:text-lg font-bold text-white">{metrics.totalMessages}</p>
                   <p className="text-[10px] text-gray-500">Messages</p>
                 </div>
               </div>
@@ -952,7 +1013,7 @@ export default function ProfilePage() {
               onClick={() => setModal({ type: 'subscription' })}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600/30 to-cyan-600/30 flex items-center justify-center border border-blue-500/20">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600/30 to-cyan-600/30 flex items-center justify-center border border-blue-500/20 flex-shrink-0">
                   <Zap className="w-5 h-5 text-cyan-400" />
                 </div>
                 <div>
@@ -970,13 +1031,13 @@ export default function ProfilePage() {
             >
               <div className="space-y-2">
                 {isGoogleUser ? (
-                  <div className="flex items-center gap-2 text-sm text-gray-300">
-                    <Shield className="w-3.5 h-3.5 text-green-400" />
+                  <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-300">
+                    <Shield className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
                     <span>Google Auth</span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 text-sm text-gray-300">
-                    <Lock className="w-3.5 h-3.5 text-blue-400" />
+                  <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-300">
+                    <Lock className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
                     <span>Password protected</span>
                   </div>
                 )}
@@ -993,7 +1054,7 @@ export default function ProfilePage() {
               <div className="space-y-2">
                 {integrations.map((int) => (
                   <div key={int.provider} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-300">{int.provider}</span>
+                    <span className="text-xs sm:text-sm text-gray-300">{int.provider}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${
                       int.connected ? 'bg-green-500/10 text-green-400' : 'bg-gray-800 text-gray-500'
                     }`}>
@@ -1004,22 +1065,26 @@ export default function ProfilePage() {
               </div>
             </DashboardCard>
 
+            {/* Settings Card */}
+            <DashboardCard
+              title="Settings"
+              icon={<Settings className="w-3.5 h-3.5" />}
+              onClick={() => setModal({ type: 'security' })}
+            >
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-300">
+                  <Settings className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                  <span>Account preferences</span>
+                </div>
+                <p className="text-[10px] text-gray-500">Manage your account settings</p>
+              </div>
+            </DashboardCard>
           </div>
         </div>
       </main>
 
-      {/* ─── Modal ──────────────────────────────────────────────────────── */}
+      {/* ─── Modal ─────────────────────────────────────────────────────── */}
       {renderModal()}
     </div>
-  );
-}
-
-// AtSign icon component (not in lucide-react by default)
-function AtSign({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="4" />
-      <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
-    </svg>
   );
 }

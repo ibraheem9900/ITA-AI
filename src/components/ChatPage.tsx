@@ -364,8 +364,6 @@ export default function ChatPage() {
   }, [darkMode]);
 
   // ─── Mobile Focus Mode ──────────────────────────────────────────────────────
-  // Task 6: On mobile, focus mode hides navbar + all chrome, shows only messages + input + floating exit
-
   const showMobileFocus = focusMode && isMobile;
 
   // ─── Render ──────────────────────────────────────────────────────────────────
@@ -391,41 +389,43 @@ export default function ChatPage() {
         {/* ═══ Top Bar (hidden in mobile focus mode) ═══════════════════════════ */}
         {!showMobileFocus && (
           <div className="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-3 border-b border-gray-800/60 bg-gray-900/50 backdrop-blur-xl z-10 flex-shrink-0">
-            {/* Left: Hamburger + Logo — Task 1 & 4 */}
+            {/* Left: Mobile hamburger + Logo */}
             <div className="flex items-center gap-1.5 sm:gap-3">
-              {/* Hamburger Menu — Task 1: pulsing glow until first tap */}
-              <div className="relative">
-                <button
-                  onClick={handleMenuClick}
-                  className={`p-2 sm:p-2.5 rounded-xl hover:bg-gray-800/50 text-gray-400 hover:text-white transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center ${
-                    !menuGlowDismissed ? 'hamburger-glow text-cyan-400' : ''
-                  }`}
-                  aria-label="Open menu"
-                >
-                  <Menu className="w-5 h-5" />
-                </button>
-                
-                {/* First-visit tooltip callout — Task 1 */}
-                {!menuGlowDismissed && (
-                  <div className="absolute top-full left-0 mt-2 w-52 p-3 bg-gray-800 border border-cyan-500/30 rounded-xl shadow-xl shadow-cyan-500/10 animate-slide-down z-50">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" />
-                      <p className="text-xs font-medium text-cyan-400">New to ITA?</p>
+              {/* Hamburger Menu — MOBILE ONLY */}
+              {isMobile && (
+                <div className="relative">
+                  <button
+                    onClick={handleMenuClick}
+                    className={`p-2 sm:p-2.5 rounded-xl hover:bg-gray-800/50 text-gray-400 hover:text-white transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center ${
+                      !menuGlowDismissed ? 'hamburger-glow text-cyan-400' : ''
+                    }`}
+                    aria-label="Open menu"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </button>
+                  
+                  {/* First-visit tooltip callout */}
+                  {!menuGlowDismissed && (
+                    <div className="absolute top-full left-0 mt-2 w-52 p-3 bg-gray-800 border border-cyan-500/30 rounded-xl shadow-xl shadow-cyan-500/10 animate-slide-down z-50">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" />
+                        <p className="text-xs font-medium text-cyan-400">New to ITA?</p>
+                      </div>
+                      <p className="text-xs text-gray-300">Explore agents & tools</p>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuGlowDismissed(true);
+                          localStorage.setItem('menuGlowDismissed', 'true');
+                        }}
+                        className="mt-2 w-full py-1.5 text-[11px] font-medium text-cyan-400 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg transition-colors"
+                      >
+                        Got it
+                      </button>
                     </div>
-                    <p className="text-xs text-gray-300">Explore agents & tools</p>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMenuGlowDismissed(true);
-                        localStorage.setItem('menuGlowDismissed', 'true');
-                      }}
-                      className="mt-2 w-full py-1.5 text-[11px] font-medium text-cyan-400 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg transition-colors"
-                    >
-                      Got it
-                    </button>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
               
               {/* Logo + Title */}
               <div className="flex items-center gap-2">
@@ -439,7 +439,7 @@ export default function ChatPage() {
               <ModelDropdown selectedModel={selectedModel} onModelChange={handleModelChange} />
             </div>
 
-            {/* Right: Focus Mode + Agents + Profile — Task 4: proper spacing */}
+            {/* Right: Focus + Agents + Profile */}
             <div className="flex items-center gap-1.5 sm:gap-3">
               {/* Focus Mode Toggle */}
               <div className="hidden sm:flex items-center gap-2">
@@ -456,20 +456,21 @@ export default function ChatPage() {
                 </button>
               </div>
 
-              {/* Agents Panel Toggle — Task 3: visible tappable card */}
-              <button
-                onClick={() => setAgentsPanelOpen(true)}
-                className="agents-toggle-btn flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/40 transition-all duration-200 min-h-[44px]"
-                title="Switch to a specialized assistant"
-              >
-                <Users className="w-4 h-4 text-cyan-400" />
-                <span className="text-[11px] font-medium text-cyan-400 hidden sm:inline">Agents</span>
-              </button>
+              {/* Agents Panel Toggle — MOBILE ONLY */}
+              {isMobile && (
+                <button
+                  onClick={() => setAgentsPanelOpen(true)}
+                  className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/40 transition-all duration-200 min-h-[44px]"
+                  title="Switch to a specialized assistant"
+                >
+                  <Users className="w-4 h-4 text-cyan-400" />
+                </button>
+              )}
 
-              {/* User Profile — Task 4: tappable with ring/glow */}
+              {/* User Profile — tappable with ring/glow */}
               <button
                 onClick={() => navigate('/account')}
-                className="profile-avatar-btn flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-700/50 hover:bg-gray-800/30 rounded-xl py-1 px-2 transition-all duration-200 min-h-[44px]"
+                className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-700/50 hover:bg-gray-800/30 rounded-xl py-1 px-2 transition-all duration-200 min-h-[44px] cursor-pointer"
                 aria-label="Open profile"
               >
                 <span className="text-xs sm:text-sm font-medium text-gray-300 hidden sm:block">{getDisplayName()}</span>
@@ -485,7 +486,7 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Mobile Focus Mode — Task 6: floating exit button */}
+        {/* Mobile Focus Mode — floating exit button */}
         {showMobileFocus && (
           <button
             onClick={toggleFocusMode}
