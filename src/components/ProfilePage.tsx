@@ -247,42 +247,32 @@ export default function ProfilePage() {
     
     try {
       const fileExt = file.name.split('.').pop();
-      const filePath = `avatars/${user.id}.${fileExt}`;
+      const filePath = `${user.id}/avatar.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, file, {
+          upsert: true,
+          contentType: file.type,
+        });
 
       if (uploadError) {
-        // If bucket doesn't exist, try creating it
-        if (uploadError.message?.includes('not found') || uploadError.message?.includes('Bucket not found')) {
-          const { error: bucketError } = await supabase.storage.createBucket('avatars', {
-            public: true,
-            allowedMimeTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'],
-            fileSizeLimit: 2 * 1024 * 1024,
-          });
-          
-          if (bucketError && !bucketError.message?.includes('already exists')) {
-            throw bucketError;
-          }
-          
-          // Retry upload
-          const { error: retryError } = await supabase.storage
-            .from('avatars')
-            .upload(filePath, file, { upsert: true });
-          
-          if (retryError) throw retryError;
-        } else {
-          throw uploadError;
-        }
+        console.error('Upload error:', uploadError);
+        throw uploadError;
       }
 
       // Get public URL with cache-busting
       const { data: urlData } = supabase.storage
         .from('avatars')
-        .getPublicUrl(`${filePath}?t=${Date.now()}`);
-
-      const avatarUrl = urlData.publicUrl;
+        .getPublicUrl(filePath, {
+          transform: {
+            width: 256,
+            height: 256,
+            resize: 'cover',
+          },
+        });
+      // Add cache buster to force refresh
+      const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
       // Update user metadata
       const { error: updateError } = await supabase.auth.updateUser({
