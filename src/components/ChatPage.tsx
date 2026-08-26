@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Conversation, Message, AIAgent, AITool, UserSettings } from '../types/chat';
+import { Conversation, Message, AIAgent, UserSettings } from '../types/chat';
 import ConversationSidebar from './ConversationSidebar';
 import AgentsPanel from './AgentsPanel';
 import ChatMessage from './ChatMessage';
@@ -11,7 +11,7 @@ import ModelDropdown from './ModelDropdown';
 import { useAuth } from '../contexts/AuthContext';
 import { getConversationalResponse } from '../lib/conversationalAI';
 import { getAIResponse, generateSmartTitle, getQuickActionPrompt, clearConversationMemory } from '../lib/clientAI';
-import { Menu, Users } from 'lucide-react';
+import { Menu, Users, Minimize2 } from 'lucide-react';
 
 const APP_LOGO = '/1775218881775-3ee13392-9669-4d24-ae5f-9ac05cae51cf.png';
 
@@ -35,11 +35,11 @@ export default function ChatPage() {
   // ─── Panel State ─────────────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [agentsPanelOpen, setAgentsPanelOpen] = useState(false);
-  const [menuTooltipDismissed, setMenuTooltipDismissed] = useState(false);
+  const [menuGlowDismissed, setMenuGlowDismissed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   
   // ─── Data State ──────────────────────────────────────────────────────────────
   const [agents, setAgents] = useState<AIAgent[]>([]);
-  const [tools, setTools] = useState<AITool[]>([]);
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
   
   // ─── Refs ────────────────────────────────────────────────────────────────────
@@ -64,11 +64,19 @@ export default function ChatPage() {
     const savedName = localStorage.getItem('userName') || '';
     const savedPersonality = localStorage.getItem('aiPersonality') || 'general';
     const savedDarkMode = localStorage.getItem('darkMode') !== 'false';
-    const tooltipDismissed = localStorage.getItem('menuTooltipDismissed') === 'true';
+    const glowDismissed = localStorage.getItem('menuGlowDismissed') === 'true';
     setUserName(savedName);
     setPersonality(savedPersonality);
     setDarkMode(savedDarkMode);
-    setMenuTooltipDismissed(tooltipDismissed);
+    setMenuGlowDismissed(glowDismissed);
+  }, []);
+
+  // Detect mobile
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
   }, []);
 
   useEffect(() => {
@@ -82,7 +90,6 @@ export default function ChatPage() {
     if (user) {
       loadConversations();
       loadAgents();
-      loadTools();
       loadUserSettings();
     }
   }, [user]);
@@ -118,14 +125,6 @@ export default function ChatPage() {
       .select('*')
       .order('created_at', { ascending: true });
     if (!error && data) setAgents(data);
-  };
-
-  const loadTools = async () => {
-    const { data, error } = await supabase
-      .from('ai_tools')
-      .select('*')
-      .order('created_at', { ascending: true });
-    if (!error && data) setTools(data);
   };
 
   const loadUserSettings = async () => {
@@ -336,9 +335,9 @@ export default function ChatPage() {
 
   const handleMenuClick = () => {
     setSidebarOpen(true);
-    if (!menuTooltipDismissed) {
-      setMenuTooltipDismissed(true);
-      localStorage.setItem('menuTooltipDismissed', 'true');
+    if (!menuGlowDismissed) {
+      setMenuGlowDismissed(true);
+      localStorage.setItem('menuGlowDismissed', 'true');
     }
   };
 
@@ -364,6 +363,11 @@ export default function ChatPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [darkMode]);
 
+  // ─── Mobile Focus Mode ──────────────────────────────────────────────────────
+  // Task 6: On mobile, focus mode hides navbar + all chrome, shows only messages + input + floating exit
+
+  const showMobileFocus = focusMode && isMobile;
+
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -374,7 +378,6 @@ export default function ChatPage() {
       <ConversationSidebar
         conversations={conversations}
         currentConversationId={currentConversationId}
-        tools={tools}
         onSelectConversation={(id) => { setCurrentConversationId(id); setMessages([]); }}
         onNewChat={() => { setCurrentConversationId(null); setMessages([]); }}
         onDeleteConversation={deleteConversation}
@@ -384,97 +387,114 @@ export default function ChatPage() {
 
       {/* ─── Main Chat Area ──────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden chat-main">
-        {/* Top Bar */}
-        <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-b border-gray-800/60 bg-gray-900/50 backdrop-blur-xl z-10 flex-shrink-0">
-          {/* Left: Menu + Logo */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Hamburger Menu with Glow + Tooltip for first-time mobile users */}
-            <div className="relative lg:hidden">
-              <button
-                onClick={handleMenuClick}
-                className={`p-2.5 rounded-xl hover:bg-gray-800/50 text-gray-400 hover:text-white transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center ${
-                  !menuTooltipDismissed ? 'animate-menu-glow text-cyan-400' : ''
-                }`}
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-              
-              {/* First-visit tooltip callout */}
-              {!menuTooltipDismissed && (
-                <div className="absolute top-full left-0 mt-2 w-52 p-3 bg-gray-800 border border-cyan-500/30 rounded-xl shadow-xl shadow-cyan-500/10 animate-slide-down z-50">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" />
-                    <p className="text-xs font-medium text-cyan-400">New to ITA?</p>
+        
+        {/* ═══ Top Bar (hidden in mobile focus mode) ═══════════════════════════ */}
+        {!showMobileFocus && (
+          <div className="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-3 border-b border-gray-800/60 bg-gray-900/50 backdrop-blur-xl z-10 flex-shrink-0">
+            {/* Left: Hamburger + Logo — Task 1 & 4 */}
+            <div className="flex items-center gap-1.5 sm:gap-3">
+              {/* Hamburger Menu — Task 1: pulsing glow until first tap */}
+              <div className="relative">
+                <button
+                  onClick={handleMenuClick}
+                  className={`p-2 sm:p-2.5 rounded-xl hover:bg-gray-800/50 text-gray-400 hover:text-white transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center ${
+                    !menuGlowDismissed ? 'hamburger-glow text-cyan-400' : ''
+                  }`}
+                  aria-label="Open menu"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+                
+                {/* First-visit tooltip callout — Task 1 */}
+                {!menuGlowDismissed && (
+                  <div className="absolute top-full left-0 mt-2 w-52 p-3 bg-gray-800 border border-cyan-500/30 rounded-xl shadow-xl shadow-cyan-500/10 animate-slide-down z-50">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" />
+                      <p className="text-xs font-medium text-cyan-400">New to ITA?</p>
+                    </div>
+                    <p className="text-xs text-gray-300">Explore agents & tools</p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuGlowDismissed(true);
+                        localStorage.setItem('menuGlowDismissed', 'true');
+                      }}
+                      className="mt-2 w-full py-1.5 text-[11px] font-medium text-cyan-400 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg transition-colors"
+                    >
+                      Got it
+                    </button>
                   </div>
-                  <p className="text-xs text-gray-300">Explore agents & tools</p>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuTooltipDismissed(true);
-                      localStorage.setItem('menuTooltipDismissed', 'true');
-                    }}
-                    className="mt-2 w-full py-1.5 text-[11px] font-medium text-cyan-400 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg transition-colors"
-                  >
-                    Got it
-                  </button>
-                </div>
-              )}
+                )}
+              </div>
+              
+              {/* Logo + Title */}
+              <div className="flex items-center gap-2">
+                <img src={APP_LOGO} alt="ITA" className="w-6 h-6 sm:w-7 sm:h-7" />
+                <span className="text-base sm:text-lg font-bold text-white">ITA</span>
+              </div>
             </div>
-            
-            <div className="flex items-center gap-2">
-              <img src={APP_LOGO} alt="ITA" className="w-6 h-6 sm:w-7 sm:h-7" />
-              <span className="text-base sm:text-lg font-bold text-white hidden sm:block">ITA</span>
+
+            {/* Center: Model Dropdown (desktop only) */}
+            <div className="hidden md:block">
+              <ModelDropdown selectedModel={selectedModel} onModelChange={handleModelChange} />
             </div>
-          </div>
 
-          {/* Center: Model Dropdown */}
-          <div className="hidden md:block">
-            <ModelDropdown selectedModel={selectedModel} onModelChange={handleModelChange} />
-          </div>
+            {/* Right: Focus Mode + Agents + Profile — Task 4: proper spacing */}
+            <div className="flex items-center gap-1.5 sm:gap-3">
+              {/* Focus Mode Toggle */}
+              <div className="hidden sm:flex items-center gap-2">
+                <span className="text-xs text-gray-500">Focus</span>
+                <button
+                  onClick={toggleFocusMode}
+                  className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${
+                    focusMode ? 'bg-cyan-600' : 'bg-gray-700'
+                  }`}
+                >
+                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
+                    focusMode ? 'translate-x-5' : ''
+                  }`} />
+                </button>
+              </div>
 
-          {/* Right: Focus Mode + Profile */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Focus Mode Toggle */}
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="text-xs text-gray-500">Focus Mode</span>
+              {/* Agents Panel Toggle — Task 3: visible tappable card */}
               <button
-                onClick={toggleFocusMode}
-                className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${
-                  focusMode ? 'bg-cyan-600' : 'bg-gray-700'
-                }`}
+                onClick={() => setAgentsPanelOpen(true)}
+                className="agents-toggle-btn flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/40 transition-all duration-200 min-h-[44px]"
+                title="Switch to a specialized assistant"
               >
-                <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
-                  focusMode ? 'translate-x-5' : ''
-                }`} />
+                <Users className="w-4 h-4 text-cyan-400" />
+                <span className="text-[11px] font-medium text-cyan-400 hidden sm:inline">Agents</span>
+              </button>
+
+              {/* User Profile — Task 4: tappable with ring/glow */}
+              <button
+                onClick={() => navigate('/account')}
+                className="profile-avatar-btn flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-700/50 hover:bg-gray-800/30 rounded-xl py-1 px-2 transition-all duration-200 min-h-[44px]"
+                aria-label="Open profile"
+              >
+                <span className="text-xs sm:text-sm font-medium text-gray-300 hidden sm:block">{getDisplayName()}</span>
+                {getUserAvatar() ? (
+                  <img src={getUserAvatar()} alt={getDisplayName()} className="w-8 h-8 sm:w-9 sm:h-9 rounded-full ring-2 ring-gray-600 hover:ring-cyan-500/60 transition-all" />
+                ) : (
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-white text-xs sm:text-sm font-medium ring-2 ring-gray-600 hover:ring-cyan-500/60 transition-all">
+                    {getDisplayName().charAt(0).toUpperCase()}
+                  </div>
+                )}
               </button>
             </div>
-
-            {/* User Profile — clickable to /account */}
-            <button
-              onClick={() => navigate('/account')}
-              className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-700/50 hover:bg-gray-800/30 rounded-lg py-1 px-2 transition-colors"
-            >
-              <span className="text-xs sm:text-sm font-medium text-gray-300 hidden sm:block">{getDisplayName()}</span>
-              {getUserAvatar() ? (
-                <img src={getUserAvatar()} alt={getDisplayName()} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-gray-700" />
-              ) : (
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-white text-xs sm:text-sm font-medium">
-                  {getDisplayName().charAt(0).toUpperCase()}
-                </div>
-              )}
-            </button>
-
-            {/* Agents Panel Toggle — visible tappable button on mobile */}
-            <button
-              onClick={() => setAgentsPanelOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/40 transition-all duration-200 xl:hidden"
-              title="Switch to a specialized assistant"
-            >
-              <Users className="w-4 h-4 text-cyan-400" />
-              <span className="text-[11px] font-medium text-cyan-400 hidden sm:inline">Agents</span>
-            </button>
           </div>
-        </div>
+        )}
+
+        {/* Mobile Focus Mode — Task 6: floating exit button */}
+        {showMobileFocus && (
+          <button
+            onClick={toggleFocusMode}
+            className="fixed top-3 right-3 z-50 p-2 rounded-full bg-gray-800/80 border border-gray-700/50 text-gray-400 hover:text-white hover:bg-gray-700/80 transition-all backdrop-blur-sm min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-label="Exit focus mode"
+          >
+            <Minimize2 className="w-4 h-4" />
+          </button>
+        )}
 
         {/* Chat Messages */}
         {messages.length === 0 && !loading ? (

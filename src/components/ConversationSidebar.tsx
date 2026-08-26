@@ -1,17 +1,15 @@
 import { useMemo } from 'react';
-import { Conversation, ConversationGroup, AITool } from '../types/chat';
-import { Plus, MessageSquare, Clock, Calendar, Trash2, Code, Palette, BarChart3, FileText, Database, ChevronDown, ChevronRight } from 'lucide-react';
+import { Conversation, ConversationGroup } from '../types/chat';
+import { Plus, MessageSquare, Clock, Calendar, Trash2 } from 'lucide-react';
 
 interface ConversationSidebarProps {
   conversations: Conversation[];
   currentConversationId: string | null;
-  tools: AITool[];
   onSelectConversation: (id: string) => void;
   onNewChat: () => void;
   onDeleteConversation?: (id: string) => void;
   isOpen: boolean;
   onClose: () => void;
-  onToolSelect?: (toolId: string) => void;
 }
 
 // ─── Time Grouping Logic ──────────────────────────────────────────────────────
@@ -45,30 +43,16 @@ function groupConversationsByTime(conversations: Conversation[]): ConversationGr
   return groups.filter((g) => g.conversations.length > 0);
 }
 
-// ─── Tool Icon Mapping ────────────────────────────────────────────────────────
-
-function getToolIcon(toolName: string) {
-  const iconMap: Record<string, typeof Code> = {
-    'Code Interpreter': Code,
-    'Image Generation': Palette,
-    'Document Summary': FileText,
-    'Data Analysis': BarChart3,
-  };
-  return iconMap[toolName] || Database;
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ConversationSidebar({
   conversations,
   currentConversationId,
-  tools,
   onSelectConversation,
   onNewChat,
   onDeleteConversation,
   isOpen,
   onClose,
-  onToolSelect,
 }: ConversationSidebarProps) {
   const conversationGroups = useMemo(() => groupConversationsByTime(conversations), [conversations]);
 
@@ -156,48 +140,13 @@ export default function ConversationSidebar({
         )}
       </div>
 
-      {/* AI Tools Section */}
+      {/* Task 5: Knowledge Library — disabled/coming soon, no active buttons */}
       <div className="border-t border-gray-800/60 p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">AI Tools</span>
-        </div>
-        <div className="space-y-1">
-          {tools.filter(t => t.is_enabled).map((tool) => {
-            const Icon = getToolIcon(tool.name);
-            return (
-              <button
-                key={tool.id}
-                onClick={() => onToolSelect?.(tool.id)}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:bg-gray-800/60 hover:text-white transition-all duration-200 text-left group"
-              >
-                <Icon className="w-4 h-4 text-gray-600 group-hover:text-cyan-400 transition-colors" />
-                <span className="text-sm">{tool.name}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Knowledge Library */}
-      <div className="border-t border-gray-800/60 p-4">
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 mb-2">
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Knowledge Library</span>
         </div>
-        <div className="space-y-1">
-          <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-gray-400 hover:bg-gray-800/60 hover:text-white transition-all duration-200 text-left group">
-            <div className="flex items-center gap-3">
-              <Database className="w-4 h-4 text-gray-600 group-hover:text-cyan-400 transition-colors" />
-              <span className="text-sm">Personal Data sources</span>
-            </div>
-            <ChevronDown className="w-4 h-4 text-gray-600" />
-          </button>
-          <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-gray-400 hover:bg-gray-800/60 hover:text-white transition-all duration-200 text-left group">
-            <div className="flex items-center gap-3">
-              <Database className="w-4 h-4 text-gray-600 group-hover:text-cyan-400 transition-colors" />
-              <span className="text-sm">Shared Data</span>
-            </div>
-            <ChevronRight className="w-4 h-4 text-gray-600" />
-          </button>
+        <div className="px-3 py-3 rounded-xl bg-gray-800/30 border border-gray-800/50 cursor-not-allowed">
+          <p className="text-xs text-gray-600">Coming soon — upload documents, link data sources, and build your personal knowledge base.</p>
         </div>
       </div>
     </div>

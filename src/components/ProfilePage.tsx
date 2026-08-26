@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Bot, BookOpen, Settings, LogOut, ChevronRight,
-  Mail, Phone, Globe, Clock, User,
+  Mail, Phone, Globe, Clock, User, Shield,
   ArrowLeft, Loader2, Save, X,
-  Lock, Eye, EyeOff, Zap, Sparkles
+  Lock, Eye, EyeOff, Zap, Sparkles,
+  MessageSquare, Camera,
+  AlertTriangle, CheckCircle, Link2
 } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -18,11 +20,24 @@ interface ProfileData {
   phone: string;
   timezone: string;
   language: string;
+  avatar_url: string;
 }
 
 interface AccountMetrics {
   memberSince: string;
   totalChats: number;
+  totalMessages: number;
+  lastActive: string;
+}
+
+interface Integration {
+  provider: string;
+  connected: boolean;
+  email?: string;
+}
+
+interface ModalState {
+  type: 'profile' | 'metrics' | 'subscription' | 'security' | 'integrations' | null;
 }
 
 // ─── Sidebar Nav Items ──────────────────────────────────────────────────────
@@ -39,6 +54,7 @@ const NAV_ITEMS = [
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── State ──────────────────────────────────────────────────────────────
   const [activeNav, setActiveNav] = useState('dashboard');
@@ -49,24 +65,39 @@ export default function ProfilePage() {
     phone: '',
     timezone: 'UTC',
     language: 'English',
+    avatar_url: '',
   });
   const [metrics, setMetrics] = useState<AccountMetrics>({
     memberSince: '',
     totalChats: 0,
+    totalMessages: 0,
+    lastActive: '',
   });
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [modal, setModal] = useState<ModalState>({ type: null });
+
+  // Avatar upload state
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   // Password change state
   const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+
+  // Detect if user signed in with Google
+  const isGoogleUser = user?.app_metadata?.providers?.includes('google') || 
+                       user?.identities?.some(i => i.provider === 'google');
 
   // ─── Load Profile Data ──────────────────────────────────────────────────
 
@@ -78,7 +109,6 @@ export default function ProfilePage() {
     if (!user) return;
     setLoading(true);
 
-    // Extract profile info from Supabase auth user
     const metadata = user.user_metadata || {};
     const email = user.email || '';
     const baseName = email.split('@')[0];
@@ -91,17 +121,17 @@ export default function ProfilePage() {
       phone: metadata.phone || '',
       timezone: metadata.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
       language: metadata.language || 'English',
+      avatar_url: metadata.avatar_url || '',
     });
 
-    // Load real metrics from database
     await loadMetrics();
+    await loadIntegrations();
     setLoading(false);
   };
 
   const loadMetrics = async () => {
     if (!user) return;
 
-    // Member since - from user.created_at
     const memberSince = user.created_at
       ? new Date(user.created_at).toLocaleDateString('en-US', {
           month: 'long',
@@ -109,16 +139,60 @@ export default function ProfilePage() {
         })
       : 'Unknown';
 
-    // Total chats - real count from conversations table
-    const { count, error } = await supabase
+    // Total conversations
+    const { count: convCount } = await supabase
       .from('conversations')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id);
 
+    // Total messages across all conversations
+    const { count: msgCount } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .in('conversation_id', 
+        (await supabase.from('conversations').select('id').eq('user_id', user.id)).data?.map(c => c.id) || []
+      );
+
+    // Last active - most recent conversation update
+    const { data: lastConv } = await supabase
+      .from('conversations')
+      .select('updated_at')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .single();
+
     setMetrics({
       memberSince,
-      totalChats: error ? 0 : (count || 0),
+      totalChats: convCount || 0,
+      totalMessages: msgCount || 0,
+      lastActive: lastConv?.updated_at 
+        ? new Date(lastConv.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : 'Never',
     });
+  };
+
+  const loadIntegrations = async () => {
+    if (!user) return;
+    
+    // Check which providers the user has connected
+    const providers = user.identities?.map(i => i.provider) || [];
+    const emailIdentity = user.identities?.find(i => i.provider === 'email');
+    
+    const integrationList: Integration[] = [
+      {
+        provider: 'Google',
+        connected: providers.includes('google'),
+        email: user.user_metadata?.email,
+      },
+      {
+        provider: 'Email',
+        connected: providers.includes('email'),
+        email: emailIdentity?.identity_data?.email,
+      },
+    ];
+    
+    setIntegrations(integrationList);
   };
 
   // ─── Edit Profile Fields ────────────────────────────────────────────────
@@ -141,10 +215,7 @@ export default function ProfilePage() {
       const updates: Record<string, string> = {};
       updates[field] = editValue;
 
-      const { error } = await supabase.auth.updateUser({
-        data: updates,
-      });
-
+      const { error } = await supabase.auth.updateUser({ data: updates });
       if (error) throw error;
 
       setProfile((prev) => ({ ...prev, [field]: editValue }));
@@ -157,16 +228,107 @@ export default function ProfilePage() {
     }
   };
 
+  // ─── Avatar Upload ──────────────────────────────────────────────────────
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Image must be less than 2MB');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    
+    try {
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (ev) => setAvatarPreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+
+      // Upload to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const filePath = `avatars/${user.id}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      const avatarUrl = urlData.publicUrl;
+
+      // Update user metadata
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: { avatar_url: avatarUrl },
+      });
+
+      if (updateError) throw updateError;
+
+      setProfile((prev) => ({ ...prev, avatar_url: avatarUrl }));
+    } catch (err) {
+      console.error('Avatar upload failed:', err);
+      alert('Failed to upload avatar. Please try again.');
+      setAvatarPreview(null);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { avatar_url: '' },
+      });
+      if (error) throw error;
+      
+      setProfile((prev) => ({ ...prev, avatar_url: '' }));
+      setAvatarPreview(null);
+    } catch (err) {
+      console.error('Failed to remove avatar:', err);
+    }
+  };
+
   // ─── Password Change ────────────────────────────────────────────────────
 
   const handlePasswordChange = async () => {
     setPasswordError('');
     setPasswordSuccess('');
 
-    if (newPassword.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
+    if (isGoogleUser) {
+      setPasswordError('Password management is handled by Google. Please sign in with Google to make changes.');
       return;
     }
+
+    if (!currentPassword) {
+      setPasswordError('Please enter your current password');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters');
+      return;
+    }
+
     if (newPassword !== confirmPassword) {
       setPasswordError('Passwords do not match');
       return;
@@ -174,12 +336,26 @@ export default function ProfilePage() {
 
     setChangingPassword(true);
     try {
+      // Re-authenticate with current password first
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: profile.email,
+        password: currentPassword,
+      });
+
+      if (authError) {
+        setPasswordError('Current password is incorrect');
+        setChangingPassword(false);
+        return;
+      }
+
+      // Update password
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });
       if (error) throw error;
 
       setPasswordSuccess('Password updated successfully');
+      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setTimeout(() => {
@@ -204,66 +380,6 @@ export default function ProfilePage() {
     }
   };
 
-  // ─── Render Profile Field Row ───────────────────────────────────────────
-
-  const renderField = (label: string, field: string, value: string, icon: React.ReactNode) => {
-    const isEditing = editingField === field;
-
-    return (
-      <div className="flex items-center justify-between py-3 border-b border-gray-800/50 last:border-0 group">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center text-gray-500 flex-shrink-0">
-            {icon}
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-gray-500 mb-0.5">{label}</p>
-            {isEditing ? (
-              <input
-                type="text"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                className="bg-gray-800 text-white text-sm px-2 py-1 rounded-lg border border-blue-500/50 focus:outline-none focus:border-blue-400 w-full"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') saveEdit(field);
-                  if (e.key === 'Escape') cancelEdit();
-                }}
-              />
-            ) : (
-              <p className="text-sm text-gray-200 truncate">{value || 'Not set'}</p>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-          {isEditing ? (
-            <>
-              <button
-                onClick={() => saveEdit(field)}
-                disabled={saving}
-                className="p-1.5 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-colors"
-              >
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              </button>
-              <button
-                onClick={cancelEdit}
-                className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => startEdit(field, value)}
-              className="px-2 py-1 text-xs text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-            >
-              Edit
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   // ─── Loading State ──────────────────────────────────────────────────────
 
   if (loading) {
@@ -276,6 +392,409 @@ export default function ProfilePage() {
       </div>
     );
   }
+
+  // ─── Modal Render ──────────────────────────────────────────────────────
+
+  const renderModal = () => {
+    if (!modal.type) return null;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setModal({ type: null })} />
+        <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl animate-scale-in">
+          {/* Modal Header */}
+          <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-gray-800 bg-gray-900/95 backdrop-blur-xl">
+            <h3 className="text-lg font-semibold text-white capitalize">
+              {modal.type === 'integrations' ? 'Integrations' : modal.type}
+            </h3>
+            <button
+              onClick={() => setModal({ type: null })}
+              className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Modal Content */}
+          <div className="p-4">
+            {modal.type === 'profile' && renderProfileModal()}
+            {modal.type === 'metrics' && renderMetricsModal()}
+            {modal.type === 'subscription' && renderSubscriptionModal()}
+            {modal.type === 'security' && renderSecurityModal()}
+            {modal.type === 'integrations' && renderIntegrationsModal()}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── Profile Modal ──────────────────────────────────────────────────────
+
+  const renderProfileModal = () => (
+    <div className="space-y-4">
+      {/* Avatar Section */}
+      <div className="flex flex-col items-center pb-4 border-b border-gray-800">
+        <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
+          {profile.avatar_url || avatarPreview ? (
+            <img
+              src={avatarPreview || profile.avatar_url}
+              alt="Profile"
+              className="w-24 h-24 rounded-full object-cover border-4 border-gray-800"
+            />
+          ) : (
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-3xl font-bold text-white border-4 border-gray-800">
+              {profile.full_name?.charAt(0).toUpperCase() || 'U'}
+            </div>
+          )}
+          <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <Camera className="w-6 h-6 text-white" />
+          </div>
+          {uploadingAvatar && (
+            <div className="absolute inset-0 rounded-full bg-black/70 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-white animate-spin" />
+            </div>
+          )}
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="user"
+          onChange={handleAvatarChange}
+          className="hidden"
+        />
+        <div className="flex items-center gap-2 mt-3">
+          <button
+            onClick={handleAvatarClick}
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            Change Photo
+          </button>
+          {(profile.avatar_url || avatarPreview) && (
+            <>
+              <span className="text-gray-600">·</span>
+              <button
+                onClick={handleRemoveAvatar}
+                className="text-xs text-red-400 hover:text-red-300 transition-colors"
+              >
+                Remove
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Editable Fields */}
+      {[
+        { label: 'Full Name', field: 'full_name', value: profile.full_name, icon: <User className="w-4 h-4" /> },
+        { label: 'Username', field: 'username', value: profile.username, icon: <AtSign className="w-4 h-4" /> },
+        { label: 'Phone', field: 'phone', value: profile.phone, icon: <Phone className="w-4 h-4" /> },
+        { label: 'Timezone', field: 'timezone', value: profile.timezone, icon: <Clock className="w-4 h-4" /> },
+        { label: 'Language', field: 'language', value: profile.language, icon: <Globe className="w-4 h-4" /> },
+      ].map(({ label, field, value, icon }) => (
+        <div key={field} className="flex items-center justify-between py-3 border-b border-gray-800/50 last:border-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-gray-800/50 flex items-center justify-center text-gray-500 flex-shrink-0">
+              {icon}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 mb-0.5">{label}</p>
+              {editingField === field ? (
+                <input
+                  type="text"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  className="bg-gray-800 text-white text-sm px-2 py-1 rounded-lg border border-blue-500/50 focus:outline-none focus:border-blue-400 w-full"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveEdit(field);
+                    if (e.key === 'Escape') cancelEdit();
+                  }}
+                />
+              ) : (
+                <p className="text-sm text-gray-200 truncate">{value || 'Not set'}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            {editingField === field ? (
+              <>
+                <button
+                  onClick={() => saveEdit(field)}
+                  disabled={saving}
+                  className="p-1.5 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-colors"
+                >
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  onClick={cancelEdit}
+                  className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => startEdit(field, value)}
+                className="px-2 py-1 text-xs text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+              >
+                Edit
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ─── Metrics Modal ──────────────────────────────────────────────────────
+
+  const renderMetricsModal = () => (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/30">
+          <p className="text-xs text-gray-500 mb-1">Member Since</p>
+          <p className="text-lg font-bold text-white">{metrics.memberSince}</p>
+        </div>
+        <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/30">
+          <p className="text-xs text-gray-500 mb-1">Total Chats</p>
+          <p className="text-lg font-bold text-white">{metrics.totalChats.toLocaleString()}</p>
+        </div>
+        <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/30">
+          <p className="text-xs text-gray-500 mb-1">Total Messages</p>
+          <p className="text-lg font-bold text-white">{metrics.totalMessages.toLocaleString()}</p>
+        </div>
+        <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/30">
+          <p className="text-xs text-gray-500 mb-1">Last Active</p>
+          <p className="text-lg font-bold text-white">{metrics.lastActive}</p>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ─── Subscription Modal ─────────────────────────────────────────────────
+
+  const renderSubscriptionModal = () => (
+    <div className="space-y-4">
+      <div className="bg-gray-800/40 rounded-xl p-5 border border-gray-700/30">
+        <div className="flex items-center gap-4 mb-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600/30 to-cyan-600/30 flex items-center justify-center border border-blue-500/20">
+            <Zap className="w-6 h-6 text-cyan-400" />
+          </div>
+          <div>
+            <p className="text-base font-semibold text-white">Free Plan</p>
+            <p className="text-sm text-gray-500">Basic features included</p>
+          </div>
+          <span className="ml-auto text-xs px-3 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded-lg">
+            Active
+          </span>
+        </div>
+        <div className="space-y-2 text-sm text-gray-400">
+          <p>✓ Unlimited conversations</p>
+          <p>✓ Multiple AI agents</p>
+          <p>✓ Web search integration</p>
+          <p className="text-gray-600">✗ Priority support</p>
+          <p className="text-gray-600">✗ Advanced analytics</p>
+        </div>
+      </div>
+      <button
+        disabled
+        className="w-full py-3 rounded-xl bg-gray-800/50 text-gray-600 text-sm font-medium cursor-not-allowed border border-gray-700/30 flex items-center justify-center gap-2"
+      >
+        <Sparkles className="w-4 h-4" />
+        Upgrade (Coming Soon)
+      </button>
+    </div>
+  );
+
+  // ─── Security Modal ─────────────────────────────────────────────────────
+
+  const renderSecurityModal = () => (
+    <div className="space-y-4">
+      {isGoogleUser ? (
+        <div className="bg-gray-800/40 rounded-xl p-5 border border-gray-700/30">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600/30 to-cyan-600/30 flex items-center justify-center border border-blue-500/20">
+              <Shield className="w-5 h-5 text-cyan-400" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-white">Signed in with Google</p>
+              <p className="text-xs text-gray-500">Password managed by Google</p>
+            </div>
+          </div>
+          <p className="text-sm text-gray-400">
+            Your account is secured through Google authentication. To change your password, 
+            please visit your Google Account settings directly.
+          </p>
+        </div>
+      ) : (
+        <div className="bg-gray-800/40 rounded-xl p-5 border border-gray-700/30">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Lock className="w-5 h-5 text-gray-400" />
+              <div>
+                <p className="text-sm font-medium text-white">Change Password</p>
+                <p className="text-xs text-gray-500">Update your account password</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowPasswordSection(!showPasswordSection)}
+              className="px-3 py-1.5 text-xs text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors border border-blue-500/30"
+            >
+              {showPasswordSection ? 'Cancel' : 'Change'}
+            </button>
+          </div>
+
+          {showPasswordSection && (
+            <div className="space-y-3 mt-4 pt-4 border-t border-gray-700/30">
+              <div className="relative">
+                <input
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Current password"
+                  className="w-full bg-gray-900/50 text-white text-sm px-3 py-2.5 rounded-lg border border-gray-700/50 focus:outline-none focus:border-blue-500/50 pr-10"
+                />
+                <button
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                >
+                  {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="New password"
+                  className="w-full bg-gray-900/50 text-white text-sm px-3 py-2.5 rounded-lg border border-gray-700/50 focus:outline-none focus:border-blue-500/50 pr-10"
+                />
+                <button
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                >
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm new password"
+                className="w-full bg-gray-900/50 text-white text-sm px-3 py-2.5 rounded-lg border border-gray-700/50 focus:outline-none focus:border-blue-500/50"
+              />
+              {passwordError && (
+                <div className="flex items-center gap-2 text-xs text-red-400">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {passwordError}
+                </div>
+              )}
+              {passwordSuccess && (
+                <div className="flex items-center gap-2 text-xs text-green-400">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  {passwordSuccess}
+                </div>
+              )}
+              <button
+                onClick={handlePasswordChange}
+                disabled={changingPassword || !currentPassword || !newPassword}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                {changingPassword ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  'Update Password'
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Log Out */}
+      <button
+        onClick={handleSignOut}
+        className="w-full py-3 rounded-xl bg-red-600/10 hover:bg-red-600/20 text-red-400 text-sm font-medium transition-colors border border-red-500/20 flex items-center justify-center gap-2"
+      >
+        <LogOut className="w-4 h-4" />
+        Log Out
+      </button>
+    </div>
+  );
+
+  // ─── Integrations Modal ─────────────────────────────────────────────────
+
+  const renderIntegrationsModal = () => (
+    <div className="space-y-4">
+      {integrations.map((integration) => (
+        <div
+          key={integration.provider}
+          className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/30"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
+                integration.connected 
+                  ? 'bg-green-500/10 border-green-500/30' 
+                  : 'bg-gray-800 border-gray-700'
+              }`}>
+                {integration.connected ? (
+                  <CheckCircle className="w-5 h-5 text-green-400" />
+                ) : (
+                  <Link2 className="w-5 h-5 text-gray-500" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-white">{integration.provider}</p>
+                <p className="text-xs text-gray-500">
+                  {integration.connected ? integration.email || 'Connected' : 'Not connected'}
+                </p>
+              </div>
+            </div>
+            <span className={`text-xs px-2 py-1 rounded-lg ${
+              integration.connected 
+                ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                : 'bg-gray-800 text-gray-500 border border-gray-700'
+            }`}>
+              {integration.connected ? 'Connected' : 'Disconnected'}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ─── Trello-style Card Component ────────────────────────────────────────
+
+  const DashboardCard = ({ 
+    title, 
+    icon, 
+    onClick, 
+    children 
+  }: { 
+    title: string; 
+    icon: React.ReactNode; 
+    onClick: () => void;
+    children: React.ReactNode;
+  }) => (
+    <button
+      onClick={onClick}
+      className="w-full text-left glass rounded-2xl p-5 border border-gray-800/50 hover:border-blue-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/5 cursor-pointer group"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+          {icon}
+          {title}
+        </h3>
+        <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-blue-400 transition-colors" />
+      </div>
+      {children}
+    </button>
+  );
 
   // ─── Main Render ────────────────────────────────────────────────────────
 
@@ -350,8 +869,29 @@ export default function ProfilePage() {
           {/* ─── Profile Header Card ────────────────────────────────────── */}
           <div className="glass rounded-2xl p-6 sm:p-8 mb-6 text-center border border-gray-800/50">
             {/* Avatar */}
-            <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-3xl font-bold text-white border-4 border-gray-900 shadow-xl shadow-blue-500/20">
-              {profile.full_name?.charAt(0).toUpperCase() || 'U'}
+            <div 
+              onClick={handleAvatarClick}
+              className="relative w-24 h-24 mx-auto mb-4 cursor-pointer group"
+            >
+              {profile.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt="Profile"
+                  className="w-24 h-24 rounded-full object-cover border-4 border-gray-900 shadow-xl shadow-blue-500/20"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-3xl font-bold text-white border-4 border-gray-900 shadow-xl shadow-blue-500/20">
+                  {profile.full_name?.charAt(0).toUpperCase() || 'U'}
+                </div>
+              )}
+              <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <Camera className="w-6 h-6 text-white" />
+              </div>
+              {uploadingAvatar && (
+                <div className="absolute inset-0 rounded-full bg-black/70 flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 text-white animate-spin" />
+                </div>
+              )}
             </div>
             <h2 className="text-2xl font-bold text-white mb-1">{profile.full_name || 'User'}</h2>
             <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
@@ -362,152 +902,124 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* ─── Profile Overview ──────────────────────────────────────── */}
-            <div className="glass rounded-2xl p-5 border border-gray-800/50">
-              <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-4">
-                Profile Overview
-              </h3>
-              <div className="space-y-0">
-                {renderField('Full Name', 'full_name', profile.full_name, <User className="w-4 h-4" />)}
-                {renderField('Email Address', 'email', profile.email, <Mail className="w-4 h-4" />)}
-                {renderField('Phone Number', 'phone', profile.phone, <Phone className="w-4 h-4" />)}
-                {renderField('Time Zone', 'timezone', profile.timezone, <Clock className="w-4 h-4" />)}
-                {renderField('Language', 'language', profile.language, <Globe className="w-4 h-4" />)}
-              </div>
-            </div>
-
-            {/* ─── Account Metrics ──────────────────────────────────────── */}
-            <div className="glass rounded-2xl p-5 border border-gray-800/50">
-              <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-4">
-                Account Metrics
-              </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/30">
-                  <p className="text-xs text-gray-500 mb-1">Member Since</p>
-                  <p className="text-lg font-bold text-white">{metrics.memberSince}</p>
+          {/* ─── Trello-style Cards Grid ─────────────────────────────────── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            
+            {/* Profile Overview Card */}
+            <DashboardCard
+              title="Profile"
+              icon={<User className="w-3.5 h-3.5" />}
+              onClick={() => setModal({ type: 'profile' })}
+            >
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-gray-300">
+                  <Mail className="w-3.5 h-3.5 text-gray-500" />
+                  <span className="truncate">{profile.email}</span>
                 </div>
-                <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/30">
-                  <p className="text-xs text-gray-500 mb-1">Total Chats</p>
-                  <p className="text-lg font-bold text-white">{metrics.totalChats.toLocaleString()}</p>
+                <div className="flex items-center gap-2 text-sm text-gray-300">
+                  <Phone className="w-3.5 h-3.5 text-gray-500" />
+                  <span>{profile.phone || 'Not set'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-300">
+                  <Globe className="w-3.5 h-3.5 text-gray-500" />
+                  <span>{profile.language}</span>
                 </div>
               </div>
-            </div>
+            </DashboardCard>
 
-            {/* ─── Subscription & Billing ──────────────────────────────── */}
-            <div className="glass rounded-2xl p-5 border border-gray-800/50">
-              <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-4">
-                Subscription & Billing
-              </h3>
-              <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/30 mb-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600/30 to-cyan-600/30 flex items-center justify-center border border-blue-500/20">
-                      <Zap className="w-5 h-5 text-cyan-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-white">Free Plan</p>
-                      <p className="text-xs text-gray-500">Basic features included</p>
-                    </div>
+            {/* Account Metrics Card */}
+            <DashboardCard
+              title="Metrics"
+              icon={<MessageSquare className="w-3.5 h-3.5" />}
+              onClick={() => setModal({ type: 'metrics' })}
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-800/30 rounded-lg p-3">
+                  <p className="text-lg font-bold text-white">{metrics.totalChats}</p>
+                  <p className="text-[10px] text-gray-500">Chats</p>
+                </div>
+                <div className="bg-gray-800/30 rounded-lg p-3">
+                  <p className="text-lg font-bold text-white">{metrics.totalMessages}</p>
+                  <p className="text-[10px] text-gray-500">Messages</p>
+                </div>
+              </div>
+            </DashboardCard>
+
+            {/* Subscription Card */}
+            <DashboardCard
+              title="Subscription"
+              icon={<Zap className="w-3.5 h-3.5" />}
+              onClick={() => setModal({ type: 'subscription' })}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600/30 to-cyan-600/30 flex items-center justify-center border border-blue-500/20">
+                  <Zap className="w-5 h-5 text-cyan-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-white">Free Plan</p>
+                  <span className="text-xs text-green-400">Active</span>
+                </div>
+              </div>
+            </DashboardCard>
+
+            {/* Security Card */}
+            <DashboardCard
+              title="Security"
+              icon={<Shield className="w-3.5 h-3.5" />}
+              onClick={() => setModal({ type: 'security' })}
+            >
+              <div className="space-y-2">
+                {isGoogleUser ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-300">
+                    <Shield className="w-3.5 h-3.5 text-green-400" />
+                    <span>Google Auth</span>
                   </div>
-                  <span className="text-xs px-2 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded-lg">
-                    Active
-                  </span>
-                </div>
-              </div>
-              <button
-                disabled
-                className="w-full py-2.5 rounded-xl bg-gray-800/50 text-gray-600 text-sm font-medium cursor-not-allowed border border-gray-700/30 flex items-center justify-center gap-2"
-              >
-                <Sparkles className="w-4 h-4" />
-                Upgrade (Coming Soon)
-              </button>
-            </div>
-
-            {/* ─── Security ────────────────────────────────────────────── */}
-            <div className="glass rounded-2xl p-5 border border-gray-800/50">
-              <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-4">
-                Security
-              </h3>
-
-              {/* Change Password */}
-              <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/30 mb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <Lock className="w-5 h-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm font-medium text-white">Change Password</p>
-                      <p className="text-xs text-gray-500">Update your password</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowPasswordSection(!showPasswordSection)}
-                    className="px-3 py-1.5 text-xs text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors border border-blue-500/30"
-                  >
-                    {showPasswordSection ? 'Cancel' : 'Change'}
-                  </button>
-                </div>
-
-                {showPasswordSection && (
-                  <div className="space-y-3 mt-4 pt-4 border-t border-gray-700/30">
-                    <div className="relative">
-                      <input
-                        type={showNewPassword ? 'text' : 'password'}
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="New password"
-                        className="w-full bg-gray-900/50 text-white text-sm px-3 py-2.5 rounded-lg border border-gray-700/50 focus:outline-none focus:border-blue-500/50 pr-10"
-                      />
-                      <button
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-                      >
-                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Confirm new password"
-                      className="w-full bg-gray-900/50 text-white text-sm px-3 py-2.5 rounded-lg border border-gray-700/50 focus:outline-none focus:border-blue-500/50"
-                    />
-                    {passwordError && (
-                      <p className="text-xs text-red-400">{passwordError}</p>
-                    )}
-                    {passwordSuccess && (
-                      <p className="text-xs text-green-400">{passwordSuccess}</p>
-                    )}
-                    <button
-                      onClick={handlePasswordChange}
-                      disabled={changingPassword || !newPassword}
-                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                    >
-                      {changingPassword ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Updating...
-                        </>
-                      ) : (
-                        'Update Password'
-                      )}
-                    </button>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-gray-300">
+                    <Lock className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Password protected</span>
                   </div>
                 )}
+                <p className="text-[10px] text-gray-500">Click to manage security settings</p>
               </div>
+            </DashboardCard>
 
-              {/* Log Out */}
-              <button
-                onClick={handleSignOut}
-                className="w-full py-3 rounded-xl bg-red-600/10 hover:bg-red-600/20 text-red-400 text-sm font-medium transition-colors border border-red-500/20 flex items-center justify-center gap-2"
-              >
-                <LogOut className="w-4 h-4" />
-                Log Out
-              </button>
-            </div>
+            {/* Integrations Card */}
+            <DashboardCard
+              title="Integrations"
+              icon={<Link2 className="w-3.5 h-3.5" />}
+              onClick={() => setModal({ type: 'integrations' })}
+            >
+              <div className="space-y-2">
+                {integrations.map((int) => (
+                  <div key={int.provider} className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">{int.provider}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      int.connected ? 'bg-green-500/10 text-green-400' : 'bg-gray-800 text-gray-500'
+                    }`}>
+                      {int.connected ? 'Connected' : 'N/A'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </DashboardCard>
+
           </div>
         </div>
       </main>
+
+      {/* ─── Modal ──────────────────────────────────────────────────────── */}
+      {renderModal()}
     </div>
+  );
+}
+
+// AtSign icon component (not in lucide-react by default)
+function AtSign({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+    </svg>
   );
 }

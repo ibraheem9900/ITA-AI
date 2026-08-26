@@ -54,12 +54,12 @@ function AgentCard({ agent, onSelect }: { agent: AIAgent; onSelect: () => void }
       disabled={agent.status !== 'active'}
       className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 text-left group ${
         agent.status === 'active'
-          ? 'hover:bg-gray-800/60 border border-transparent hover:border-gray-700/50'
+          ? 'hover:bg-gray-800/60 border border-transparent hover:border-cyan-500/20 hover:shadow-lg hover:shadow-cyan-500/5 cursor-pointer'
           : 'opacity-60 cursor-not-allowed border border-transparent'
       }`}
     >
       <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110"
         style={{ background: `${agent.color}20`, border: `1px solid ${agent.color}40` }}
       >
         <Icon className="w-5 h-5" style={{ color: agent.color }} />
@@ -89,19 +89,19 @@ export default function AgentsPanel({ agents, onAgentSelect, isOpen, onClose }: 
     <div className="h-full flex flex-col bg-gray-900/98 border-l border-gray-800/60 backdrop-blur-xl">
       {/* Subscription Banner */}
       <div className="p-4 border-b border-gray-800/60">
-        <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 font-medium text-sm transition-all duration-200">
+        <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 font-medium text-sm transition-all duration-200 hover:shadow-lg hover:shadow-cyan-500/10 cursor-pointer">
           <Crown className="w-4 h-4" />
           Manage Subscription
         </button>
       </div>
 
-      {/* Agents Header */}
+      {/* Agents Header — Task 2: clear interactive header */}
       <div className="p-4 border-b border-gray-800/60">
         <div className="flex items-center gap-2 mb-1">
           <Sparkles className="w-4 h-4 text-cyan-400" />
           <span className="text-sm font-semibold text-white">Specialized AI Agents</span>
         </div>
-        <p className="text-xs text-gray-500">Configure agent for future chats.</p>
+        <p className="text-xs text-gray-500">Tap an agent to switch your assistant's expertise.</p>
       </div>
 
       {/* Agent List */}
@@ -138,8 +138,8 @@ export default function AgentsPanel({ agents, onAgentSelect, isOpen, onClose }: 
 
   return (
     <>
-      {/* Desktop panel */}
-      <div className="hidden xl:block w-72 h-screen flex-shrink-0 agents-panel">
+      {/* Desktop panel — Task 2: visible interactive element */}
+      <div className="hidden xl:block w-72 h-screen flex-shrink-0 agents-panel border-l border-gray-800/60">
         {panelContent}
       </div>
 
