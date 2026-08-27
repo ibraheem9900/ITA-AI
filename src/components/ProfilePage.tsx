@@ -51,6 +51,28 @@ const NAV_ITEMS = [
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
+function AvatarImage({ src, name, size = 'md' }: { src: string; name: string; size?: 'sm' | 'md' | 'lg' }) {
+  const [imgError, setImgError] = useState(false);
+  const sizeClasses = size === 'lg' ? 'w-24 h-24 text-3xl' : size === 'md' ? 'w-20 h-20 sm:w-24 sm:h-24 text-2xl sm:text-3xl' : 'w-8 h-8 sm:w-9 sm:h-9 text-xs sm:text-sm';
+  
+  if (!src || imgError) {
+    return (
+      <div className={`${sizeClasses} rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center font-bold text-white`}>
+        {name?.charAt(0).toUpperCase() || 'U'}
+      </div>
+    );
+  }
+  
+  return (
+    <img
+      src={src}
+      alt={name || 'Profile'}
+      className={`${sizeClasses} rounded-full object-cover`}
+      onError={() => setImgError(true)}
+    />
+  );
+}
+
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -233,8 +255,9 @@ export default function ProfilePage() {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Please select a JPG or PNG image file');
       return;
     }
 
@@ -264,15 +287,8 @@ export default function ProfilePage() {
       // Get public URL with cache-busting
       const { data: urlData } = supabase.storage
         .from('avatars')
-        .getPublicUrl(filePath, {
-          transform: {
-            width: 256,
-            height: 256,
-            resize: 'cover',
-          },
-        });
-      // Add cache buster to force refresh
-      const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+        .getPublicUrl(filePath);
+      const avatarUrl = urlData.publicUrl;
 
       // Update user metadata
       const { error: updateError } = await supabase.auth.updateUser({
@@ -434,17 +450,9 @@ export default function ProfilePage() {
       {/* Avatar Section */}
       <div className="flex flex-col items-center pb-4 border-b border-gray-800">
         <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
-          {profile.avatar_url ? (
-            <img
-              src={profile.avatar_url}
-              alt="Profile"
-              className="w-24 h-24 rounded-full object-cover border-4 border-gray-800"
-            />
-          ) : (
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-3xl font-bold text-white border-4 border-gray-800">
-              {profile.full_name?.charAt(0).toUpperCase() || 'U'}
-            </div>
-          )}
+          <div className="w-24 h-24 rounded-full border-4 border-gray-800 overflow-hidden">
+            <AvatarImage src={profile.avatar_url} name={profile.full_name} size="lg" />
+          </div>
           <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <Camera className="w-6 h-6 text-white" />
           </div>
@@ -457,7 +465,7 @@ export default function ProfilePage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/jpg,image/png"
           onChange={handleAvatarChange}
           className="hidden"
         />
@@ -924,17 +932,9 @@ export default function ProfilePage() {
               onClick={handleAvatarClick}
               className="relative w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-3 cursor-pointer group"
             >
-              {profile.avatar_url ? (
-                <img
-                  src={profile.avatar_url}
-                  alt="Profile"
-                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-gray-900 shadow-xl shadow-blue-500/20"
-                />
-              ) : (
-                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-2xl sm:text-3xl font-bold text-white border-4 border-gray-900 shadow-xl shadow-blue-500/20">
-                  {profile.full_name?.charAt(0).toUpperCase() || 'U'}
-                </div>
-              )}
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-gray-900 shadow-xl shadow-blue-500/20 overflow-hidden">
+                <AvatarImage src={profile.avatar_url} name={profile.full_name} size="md" />
+              </div>
               <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
