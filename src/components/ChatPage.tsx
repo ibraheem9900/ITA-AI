@@ -399,8 +399,10 @@ export default function ChatPage() {
                 <div className="relative">
                   <button
                     onClick={handleMenuClick}
-                    className={`p-2 rounded-xl hover:bg-gray-800/50 text-gray-400 hover:text-white transition-all duration-200 min-w-[40px] min-h-[40px] flex items-center justify-center ${
-                      !menuGlowDismissed ? 'hamburger-glow' : ''
+                    className={`p-2.5 rounded-xl hover:bg-gray-800/50 transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center ${
+                      !menuGlowDismissed 
+                        ? 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/40 shadow-[0_0_12px_2px_rgba(6,182,212,0.4)]' 
+                        : 'text-gray-400 hover:text-white'
                     }`}
                     aria-label="Open menu"
                   >
@@ -431,38 +433,16 @@ export default function ChatPage() {
                 <img src={APP_LOGO} alt="ITA" className="w-6 h-6" />
                 <span className="text-sm sm:text-base font-bold text-white">ITA</span>
               </div>
+
+              {/* Model Dropdown — DESKTOP ONLY in navbar */}
+              <div className="hidden md:block">
+                <ModelDropdown selectedModel={selectedModel} onModelChange={handleModelChange} />
+              </div>
             </div>
 
-            {/* Center: Model Dropdown (desktop + mobile) */}
-            <div className="flex-shrink-0">
-              <ModelDropdown selectedModel={selectedModel} onModelChange={handleModelChange} />
-            </div>
-
-            {/* Right: Profile + Agents (mobile only) + Focus */}
+            {/* Right: Focus → Agents → Profile (left to right) */}
             <div className="flex items-center gap-1.5 sm:gap-2">
-              {/* User Profile — always first in right group */}
-              <button
-                onClick={() => navigate('/account')}
-                className="flex items-center gap-1.5 sm:gap-2 hover:bg-gray-800/30 rounded-xl py-1 px-1.5 sm:px-2 transition-all duration-200 min-h-[40px] cursor-pointer"
-                aria-label="Open profile"
-              >
-                <span className="text-[11px] sm:text-xs font-medium text-gray-300 hidden sm:block max-w-[80px] truncate">{getDisplayName()}</span>
-                <Avatar src={getUserAvatar()} name={getDisplayName()} size="sm" />
-              </button>
-
-              {/* Agents Panel Toggle — MOBILE ONLY */}
-              {isMobile && (
-                <button
-                  onClick={() => setAgentsPanelOpen(true)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/40 transition-all duration-200 min-w-[40px] min-h-[40px]"
-                  title="Switch to a specialized assistant"
-                >
-                  <Sparkles className="w-4 h-4 text-cyan-400" />
-                  <span className="text-[10px] font-medium text-cyan-400 hidden sm:inline">Agents</span>
-                </button>
-              )}
-
-              {/* Focus Mode Toggle */}
+              {/* Focus Mode Toggle — leftmost in right group */}
               <button
                 onClick={toggleFocusMode}
                 className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl hover:bg-gray-800/50 transition-all duration-200 min-h-[40px]"
@@ -477,7 +457,36 @@ export default function ChatPage() {
                   }`} />
                 </div>
               </button>
+
+              {/* Agents Panel Toggle — MOBILE ONLY (between Focus and Profile) */}
+              {isMobile && (
+                <button
+                  onClick={() => setAgentsPanelOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/40 transition-all duration-200 min-w-[40px] min-h-[40px]"
+                  title="Switch to a specialized assistant"
+                >
+                  <Sparkles className="w-4 h-4 text-cyan-400" />
+                  <span className="text-[10px] font-medium text-cyan-400 hidden sm:inline">Agents</span>
+                </button>
+              )}
+
+              {/* User Profile — RIGHTMOST (closest to edge) */}
+              <button
+                onClick={() => navigate('/account')}
+                className="flex items-center gap-1.5 sm:gap-2 hover:bg-gray-800/30 rounded-xl py-1 px-1.5 sm:px-2 transition-all duration-200 min-h-[40px] cursor-pointer"
+                aria-label="Open profile"
+              >
+                <Avatar src={getUserAvatar()} name={getDisplayName()} size="sm" />
+                <span className="text-[11px] sm:text-xs font-medium text-gray-300 max-w-[80px] truncate">{getDisplayName()}</span>
+              </button>
             </div>
+          </div>
+        )}
+
+        {/* ═══ Mobile Model Selector (below navbar, above input) ════════════ */}
+        {isMobile && !showMobileFocus && (
+          <div className="flex items-center justify-center px-3 py-1.5 border-b border-gray-800/40 bg-gray-900/30">
+            <ModelDropdown selectedModel={selectedModel} onModelChange={handleModelChange} />
           </div>
         )}
 
