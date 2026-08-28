@@ -12,7 +12,7 @@ import Avatar from './Avatar';
 import { useAuth } from '../contexts/AuthContext';
 import { getConversationalResponse } from '../lib/conversationalAI';
 import { getAIResponse, generateSmartTitle, getQuickActionPrompt, clearConversationMemory } from '../lib/clientAI';
-import { Menu, Users, Minimize2 } from 'lucide-react';
+import { Menu, Bot, Minimize2, Sparkles } from 'lucide-react';
 
 const APP_LOGO = '/1775218881775-3ee13392-9669-4d24-ae5f-9ac05cae51cf.png';
 
@@ -392,15 +392,15 @@ export default function ChatPage() {
         {/* ═══ Top Bar (hidden in focus mode) ═══════════════════════════ */}
         {!showMobileFocus && (
           <div className="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-3 border-b border-gray-800/60 bg-gray-900/50 backdrop-blur-xl z-10 flex-shrink-0">
-            {/* Left: Mobile hamburger + Logo */}
+            {/* Left: Mobile hamburger + Logo / Desktop Logo */}
             <div className="flex items-center gap-1 sm:gap-2">
-              {/* Hamburger Menu — MOBILE ONLY with glow */}
+              {/* Hamburger Menu — MOBILE ONLY with glow animation */}
               {isMobile && (
                 <div className="relative">
                   <button
                     onClick={handleMenuClick}
                     className={`p-2 rounded-xl hover:bg-gray-800/50 text-gray-400 hover:text-white transition-all duration-200 min-w-[40px] min-h-[40px] flex items-center justify-center ${
-                      !menuGlowDismissed ? 'hamburger-glow text-cyan-400' : ''
+                      !menuGlowDismissed ? 'hamburger-glow' : ''
                     }`}
                     aria-label="Open menu"
                   >
@@ -433,14 +433,14 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Center: Model Dropdown (desktop only) */}
-            <div className="hidden md:block">
+            {/* Center: Model Dropdown (desktop + mobile) */}
+            <div className="flex-shrink-0">
               <ModelDropdown selectedModel={selectedModel} onModelChange={handleModelChange} />
             </div>
 
-            {/* Right: Profile + Agents + Focus */}
+            {/* Right: Profile + Agents (mobile only) + Focus */}
             <div className="flex items-center gap-1.5 sm:gap-2">
-              {/* User Profile */}
+              {/* User Profile — always first in right group */}
               <button
                 onClick={() => navigate('/account')}
                 className="flex items-center gap-1.5 sm:gap-2 hover:bg-gray-800/30 rounded-xl py-1 px-1.5 sm:px-2 transition-all duration-200 min-h-[40px] cursor-pointer"
@@ -450,29 +450,33 @@ export default function ChatPage() {
                 <Avatar src={getUserAvatar()} name={getDisplayName()} size="sm" />
               </button>
 
-              {/* Agents Panel Toggle */}
-              <button
-                onClick={() => setAgentsPanelOpen(true)}
-                className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/40 transition-all duration-200"
-                title="Switch to a specialized assistant"
-              >
-                <Users className="w-4 h-4 text-cyan-400" />
-              </button>
-
-              {/* Focus Mode Toggle (desktop + mobile) */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-gray-500 hidden sm:inline">Focus</span>
+              {/* Agents Panel Toggle — MOBILE ONLY */}
+              {isMobile && (
                 <button
-                  onClick={toggleFocusMode}
-                  className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
-                    focusMode ? 'bg-cyan-600' : 'bg-gray-700'
-                  }`}
+                  onClick={() => setAgentsPanelOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/40 transition-all duration-200 min-w-[40px] min-h-[40px]"
+                  title="Switch to a specialized assistant"
                 >
-                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
-                    focusMode ? 'translate-x-4' : ''
-                  }`} />
+                  <Sparkles className="w-4 h-4 text-cyan-400" />
+                  <span className="text-[10px] font-medium text-cyan-400 hidden sm:inline">Agents</span>
                 </button>
-              </div>
+              )}
+
+              {/* Focus Mode Toggle */}
+              <button
+                onClick={toggleFocusMode}
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl hover:bg-gray-800/50 transition-all duration-200 min-h-[40px]"
+                aria-label="Toggle focus mode"
+              >
+                <span className="text-[10px] sm:text-xs text-gray-500">Focus</span>
+                <div className={`relative w-10 h-5 rounded-full transition-colors duration-300 ${
+                  focusMode ? 'bg-gradient-to-r from-cyan-600 to-blue-600' : 'bg-gray-700 border border-gray-600'
+                }`}>
+                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-300 ${
+                    focusMode ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </div>
+              </button>
             </div>
           </div>
         )}
