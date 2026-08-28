@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import Avatar from './Avatar';
 import {
   LayoutDashboard, Bot, BookOpen, Settings, LogOut, ChevronRight,
   Mail, Phone, Globe, Clock, User, Shield,
@@ -50,28 +51,6 @@ const NAV_ITEMS = [
 ];
 
 // ─── Main Component ─────────────────────────────────────────────────────────
-
-function AvatarImage({ src, name, size = 'md' }: { src: string; name: string; size?: 'sm' | 'md' | 'lg' }) {
-  const [imgError, setImgError] = useState(false);
-  const sizeClasses = size === 'lg' ? 'w-24 h-24 text-3xl' : size === 'md' ? 'w-20 h-20 sm:w-24 sm:h-24 text-2xl sm:text-3xl' : 'w-8 h-8 sm:w-9 sm:h-9 text-xs sm:text-sm';
-  
-  if (!src || imgError) {
-    return (
-      <div className={`${sizeClasses} rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center font-bold text-white`}>
-        {name?.charAt(0).toUpperCase() || 'U'}
-      </div>
-    );
-  }
-  
-  return (
-    <img
-      src={src}
-      alt={name || 'Profile'}
-      className={`${sizeClasses} rounded-full object-cover`}
-      onError={() => setImgError(true)}
-    />
-  );
-}
 
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
@@ -451,7 +430,7 @@ export default function ProfilePage() {
       <div className="flex flex-col items-center pb-4 border-b border-gray-800">
         <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
           <div className="w-24 h-24 rounded-full border-4 border-gray-800 overflow-hidden">
-            <AvatarImage src={profile.avatar_url} name={profile.full_name} size="lg" />
+            <Avatar src={profile.avatar_url} name={profile.full_name} size="lg" />
           </div>
           <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <Camera className="w-6 h-6 text-white" />
@@ -932,8 +911,8 @@ export default function ProfilePage() {
               onClick={handleAvatarClick}
               className="relative w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-3 cursor-pointer group"
             >
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-4 border-gray-900 shadow-xl shadow-blue-500/20 overflow-hidden">
-                <AvatarImage src={profile.avatar_url} name={profile.full_name} size="md" />
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden">
+                <Avatar src={profile.avatar_url} name={profile.full_name} size="md" />
               </div>
               <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-white" />

@@ -8,6 +8,7 @@ import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import LoadingMessage from './LoadingMessage';
 import ModelDropdown from './ModelDropdown';
+import Avatar from './Avatar';
 import { useAuth } from '../contexts/AuthContext';
 import { getConversationalResponse } from '../lib/conversationalAI';
 import { getAIResponse, generateSmartTitle, getQuickActionPrompt, clearConversationMemory } from '../lib/clientAI';
@@ -373,30 +374,32 @@ export default function ChatPage() {
       focusMode ? 'focus-mode-active' : ''
     }`}>
       {/* ─── Left Sidebar ────────────────────────────────────────────────────── */}
-      <ConversationSidebar
-        conversations={conversations}
-        currentConversationId={currentConversationId}
-        onSelectConversation={(id) => { setCurrentConversationId(id); setMessages([]); }}
-        onNewChat={() => { setCurrentConversationId(null); setMessages([]); }}
-        onDeleteConversation={deleteConversation}
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
+      {!showMobileFocus && (
+        <ConversationSidebar
+          conversations={conversations}
+          currentConversationId={currentConversationId}
+          onSelectConversation={(id) => { setCurrentConversationId(id); setMessages([]); }}
+          onNewChat={() => { setCurrentConversationId(null); setMessages([]); }}
+          onDeleteConversation={deleteConversation}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
+      )}
 
       {/* ─── Main Chat Area ──────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden chat-main">
         
-        {/* ═══ Top Bar (hidden in mobile focus mode) ═══════════════════════════ */}
+        {/* ═══ Top Bar (hidden in focus mode) ═══════════════════════════ */}
         {!showMobileFocus && (
           <div className="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-3 border-b border-gray-800/60 bg-gray-900/50 backdrop-blur-xl z-10 flex-shrink-0">
             {/* Left: Mobile hamburger + Logo */}
-            <div className="flex items-center gap-1.5 sm:gap-3">
-              {/* Hamburger Menu — MOBILE ONLY */}
+            <div className="flex items-center gap-1 sm:gap-2">
+              {/* Hamburger Menu — MOBILE ONLY with glow */}
               {isMobile && (
                 <div className="relative">
                   <button
                     onClick={handleMenuClick}
-                    className={`p-2 sm:p-2.5 rounded-xl hover:bg-gray-800/50 text-gray-400 hover:text-white transition-all duration-200 min-w-[44px] min-h-[44px] flex items-center justify-center ${
+                    className={`p-2 rounded-xl hover:bg-gray-800/50 text-gray-400 hover:text-white transition-all duration-200 min-w-[40px] min-h-[40px] flex items-center justify-center ${
                       !menuGlowDismissed ? 'hamburger-glow text-cyan-400' : ''
                     }`}
                     aria-label="Open menu"
@@ -404,21 +407,17 @@ export default function ChatPage() {
                     <Menu className="w-5 h-5" />
                   </button>
                   
-                  {/* First-visit tooltip callout */}
+                  {/* First-visit tooltip */}
                   {!menuGlowDismissed && (
-                    <div className="absolute top-full left-0 mt-2 w-52 p-3 bg-gray-800 border border-cyan-500/30 rounded-xl shadow-xl shadow-cyan-500/10 animate-slide-down z-50">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" />
-                        <p className="text-xs font-medium text-cyan-400">New to ITA?</p>
-                      </div>
-                      <p className="text-xs text-gray-300">Explore agents & tools</p>
+                    <div className="absolute top-full left-0 mt-2 w-48 p-2.5 bg-gray-800 border border-cyan-500/30 rounded-xl shadow-xl shadow-cyan-500/10 animate-slide-down z-50">
+                      <p className="text-[11px] text-gray-300 mb-2">Explore agents & tools</p>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setMenuGlowDismissed(true);
                           localStorage.setItem('menuGlowDismissed', 'true');
                         }}
-                        className="mt-2 w-full py-1.5 text-[11px] font-medium text-cyan-400 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg transition-colors"
+                        className="w-full py-1 text-[10px] font-medium text-cyan-400 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg transition-colors"
                       >
                         Got it
                       </button>
@@ -428,9 +427,9 @@ export default function ChatPage() {
               )}
               
               {/* Logo + Title */}
-              <div className="flex items-center gap-2">
-                <img src={APP_LOGO} alt="ITA" className="w-6 h-6 sm:w-7 sm:h-7" />
-                <span className="text-base sm:text-lg font-bold text-white">ITA</span>
+              <div className="flex items-center gap-1.5">
+                <img src={APP_LOGO} alt="ITA" className="w-6 h-6" />
+                <span className="text-sm sm:text-base font-bold text-white">ITA</span>
               </div>
             </div>
 
@@ -439,49 +438,41 @@ export default function ChatPage() {
               <ModelDropdown selectedModel={selectedModel} onModelChange={handleModelChange} />
             </div>
 
-            {/* Right: Focus + Agents + Profile */}
-            <div className="flex items-center gap-1.5 sm:gap-3">
-              {/* Focus Mode Toggle */}
-              <div className="hidden sm:flex items-center gap-2">
-                <span className="text-xs text-gray-500">Focus</span>
+            {/* Right: Profile + Agents + Focus */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* User Profile */}
+              <button
+                onClick={() => navigate('/account')}
+                className="flex items-center gap-1.5 sm:gap-2 hover:bg-gray-800/30 rounded-xl py-1 px-1.5 sm:px-2 transition-all duration-200 min-h-[40px] cursor-pointer"
+                aria-label="Open profile"
+              >
+                <span className="text-[11px] sm:text-xs font-medium text-gray-300 hidden sm:block max-w-[80px] truncate">{getDisplayName()}</span>
+                <Avatar src={getUserAvatar()} name={getDisplayName()} size="sm" />
+              </button>
+
+              {/* Agents Panel Toggle */}
+              <button
+                onClick={() => setAgentsPanelOpen(true)}
+                className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/40 transition-all duration-200"
+                title="Switch to a specialized assistant"
+              >
+                <Users className="w-4 h-4 text-cyan-400" />
+              </button>
+
+              {/* Focus Mode Toggle (desktop + mobile) */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-gray-500 hidden sm:inline">Focus</span>
                 <button
                   onClick={toggleFocusMode}
-                  className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${
+                  className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
                     focusMode ? 'bg-cyan-600' : 'bg-gray-700'
                   }`}
                 >
                   <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
-                    focusMode ? 'translate-x-5' : ''
+                    focusMode ? 'translate-x-4' : ''
                   }`} />
                 </button>
               </div>
-
-              {/* Agents Panel Toggle — MOBILE ONLY */}
-              {isMobile && (
-                <button
-                  onClick={() => setAgentsPanelOpen(true)}
-                  className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/40 transition-all duration-200 min-h-[44px]"
-                  title="Switch to a specialized assistant"
-                >
-                  <Users className="w-4 h-4 text-cyan-400" />
-                </button>
-              )}
-
-              {/* User Profile — tappable with ring/glow */}
-              <button
-                onClick={() => navigate('/account')}
-                className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-700/50 hover:bg-gray-800/30 rounded-xl py-1 px-2 transition-all duration-200 min-h-[44px] cursor-pointer"
-                aria-label="Open profile"
-              >
-                <span className="text-xs sm:text-sm font-medium text-gray-300 hidden sm:block">{getDisplayName()}</span>
-                {getUserAvatar() ? (
-                  <img src={getUserAvatar()} alt={getDisplayName()} className="w-8 h-8 sm:w-9 sm:h-9 rounded-full ring-2 ring-gray-600 hover:ring-cyan-500/60 transition-all" />
-                ) : (
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-white text-xs sm:text-sm font-medium ring-2 ring-gray-600 hover:ring-cyan-500/60 transition-all">
-                    {getDisplayName().charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </button>
             </div>
           </div>
         )}
@@ -490,7 +481,7 @@ export default function ChatPage() {
         {showMobileFocus && (
           <button
             onClick={toggleFocusMode}
-            className="fixed top-3 right-3 z-50 p-2 rounded-full bg-gray-800/80 border border-gray-700/50 text-gray-400 hover:text-white hover:bg-gray-700/80 transition-all backdrop-blur-sm min-w-[44px] min-h-[44px] flex items-center justify-center"
+            className="fixed top-3 right-3 z-50 p-2.5 rounded-full bg-gray-800/90 border border-gray-700/50 text-gray-400 hover:text-white hover:bg-gray-700/90 transition-all backdrop-blur-sm min-w-[44px] min-h-[44px] flex items-center justify-center shadow-lg"
             aria-label="Exit focus mode"
           >
             <Minimize2 className="w-4 h-4" />
@@ -545,12 +536,14 @@ export default function ChatPage() {
       </div>
 
       {/* ─── Right Agents Panel ──────────────────────────────────────────────── */}
-      <AgentsPanel
-        agents={agents}
-        onAgentSelect={handleAgentSelect}
-        isOpen={agentsPanelOpen}
-        onClose={() => setAgentsPanelOpen(false)}
-      />
+      {!showMobileFocus && (
+        <AgentsPanel
+          agents={agents}
+          onAgentSelect={handleAgentSelect}
+          isOpen={agentsPanelOpen}
+          onClose={() => setAgentsPanelOpen(false)}
+        />
+      )}
     </div>
   );
 }
